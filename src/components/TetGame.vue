@@ -5,6 +5,8 @@ import { onMounted, onUnmounted } from "vue";
 let container;
 let pixiapp: PIXI.Application<HTMLCanvasElement>;
 
+const NEXT_COUNT = 5;
+
 let appHeight: number;
 let appWidth: number;
 let fieldWidth: number;
@@ -22,6 +24,7 @@ let blocksMatrix: PIXI.Matrix;
 
 class Shape {
   shapes: {x: number, y: number}[][];
+
   constructor(shapeCoords: number[][], width: number) {
     this.shapes = Array(4).fill(undefined).map(() => {
       return Array(4).fill(undefined).map(() => {
@@ -211,6 +214,68 @@ function refreshBlocks() {
   blocks.clear();
   drawFieldBlocks();
 }
+
+class PieceBag {
+  pieces: string[];
+  count: number;
+
+  constructor() {
+    this.pieces = [];
+    this.count = 0;
+    this.generate();
+  }
+
+  isEmpty(): boolean {
+    return this.count == 0;
+  }
+
+  generate() {
+    this.pieces = [...shapeList];
+    for (let i = shapeList.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = this.pieces[i];
+      this.pieces[i] = this.pieces[j];
+      this.pieces[j] = tmp;
+    }
+    this.count = 7;
+  }
+
+  dequeue(): string | undefined {
+    this.count--;
+    return this.pieces.shift();
+  }
+
+  enqueue(bag: PieceBag): void;
+  enqueue(piece: string): void;
+  enqueue(pieces: PieceBag | string) {
+    if (pieces instanceof PieceBag) {
+      this.pieces.concat(bag.pieces);
+      this.count += bag.count;
+    } else {
+      this.pieces.push(pieces);
+      this.count += 1;
+    }
+  }
+}
+
+let nexts: PieceBag;
+let bag: PieceBag;
+
+function pullNextPiece(): string {
+  let result = nexts.dequeue();
+  if (result === undefined)
+    throw Error;
+  return result;
+}
+
+function getNextList(): string[] {
+  if (nexts.count < NEXT_COUNT) {
+    bag.generate();
+    nexts.enqueue(bag);
+  }
+  return nexts.pieces.slice(0, NEXT_COUNT);
+}
+
 </script>
 
 <template>
