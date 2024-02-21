@@ -1,6 +1,6 @@
 <template>
   <div class="home-container">
-    ホームに書くことない
+    ToDo　アカウント情報とか表示
   </div>
 </template>
 
