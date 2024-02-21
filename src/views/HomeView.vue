@@ -1,11 +1,11 @@
 <template>
-  <div class="container">
+  <div class="home-container">
     ホームに書くことない
   </div>
 </template>
 
 <style scoped>
-.container {
+.home-container {
   user-select: none;
   font-family: 'M PLUS 1';
   font-weight: 500;

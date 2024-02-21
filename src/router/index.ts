@@ -18,6 +18,11 @@ const router = createRouter({
       path: '/play/szlj',
       name: 'play-szlj',
       component: () => import('../views/SZLJQuizView.vue')
+    },
+    {
+      path: '/play/endless',
+      name: 'play-endless',
+      component: () => import('../views/TetEndlessView.vue')
     }
   ]
 })

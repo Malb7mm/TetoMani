@@ -15,7 +15,7 @@ import { RouterLink, RouterView } from 'vue-router'
     <div class="dot"></div>
 
     <nav class="nav-mode">
-      <RouterLink to="/play/solo">エンドレス</RouterLink>
+      <RouterLink to="/play/endless">エンドレス</RouterLink>
       <RouterLink to="/play/szlj">SZ・LJクイズ</RouterLink>
     </nav>
   </div>
@@ -32,6 +32,7 @@ import { RouterLink, RouterView } from 'vue-router'
   padding: 15px;
 
   background: linear-gradient(120deg, #234, #282646);
+  box-shadow: 4px 0 10px #234a;
 }
 
 .sidebar-icon {
@@ -88,6 +89,11 @@ nav {
   background: linear-gradient(70deg, #456, #465666);
 }
 
+.nav-top a.router-link-exact-active {
+  color: #cfe;
+  background: linear-gradient(70deg, #456, #465666);
+}
+
 .nav-mode a {
   color: #a97;
   margin: 4px;
@@ -103,6 +109,11 @@ nav {
 }
 
 .nav-mode a:hover {
+  background: linear-gradient(70deg, #554, #707050);
+}
+
+.nav-mode a.router-link-exact-active {
+  color: #fec;
   background: linear-gradient(70deg, #554, #707050);
 }
 </style>
