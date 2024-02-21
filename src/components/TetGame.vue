@@ -153,6 +153,14 @@ function update(delta: number) {
   refreshBlocks();
 }
 
+function refreshBlocks() {
+  blocks.clear();
+  drawFieldBlocks();
+
+  infoBlocks.removeChildren();
+  drawNextList();
+}
+
 function calcBlocksMatrix(): PIXI.Matrix {
   let gWidth = fieldWidth / 10;
 
@@ -304,12 +312,6 @@ function createPieceSprite(shapeName: string, pxPx: number, pyPx: number, rotati
   return result;
 }
 
-function refreshBlocks() {
-  blocks.clear();
-  drawFieldBlocks();
-  drawNextList();
-}
-
 class PieceBag {
   pieces: string[];
   count: number;
@@ -344,7 +346,7 @@ class PieceBag {
   enqueue(piece: string): void;
   enqueue(pieces: PieceBag | string) {
     if (pieces instanceof PieceBag) {
-      this.pieces.concat(genBag.pieces);
+      this.pieces = this.pieces.concat(genBag.pieces);
       this.count += genBag.count;
     } else {
       this.pieces.push(pieces);
@@ -357,6 +359,11 @@ let nextsBag: PieceBag;
 let genBag: PieceBag;
 
 function pullNextPiece(): string {
+  if (nextsBag.count == 0) {
+    genBag.generate();
+    nextsBag.enqueue(genBag);
+  }
+  
   let result = nextsBag.dequeue();
   if (result === undefined)
     throw Error;
@@ -368,6 +375,7 @@ function getNextList(): string[] {
     genBag.generate();
     nextsBag.enqueue(genBag);
   }
+
   return nextsBag.pieces.slice(0, NEXT_COUNT);
 }
 
@@ -386,7 +394,6 @@ function drawNextList() {
     infoBlocks.addChild(sprite);
   }
 }
-
 </script>
 
 <template>
