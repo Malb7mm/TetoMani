@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import * as PIXI from "pixi.js";
 import { onMounted, onUnmounted } from "vue";
-import type { PixiMatrix } from "vue3-pixi";
 
 let container;
 let pixiapp: PIXI.Application<HTMLCanvasElement>;
@@ -20,6 +19,57 @@ let tex: { [key: string]: PIXI.Texture } = {};
 const blockTexId = ["bRed", "bOrange", "bYellow", "bGreen", "bBlue", "bCyan", "bPurple", "bGray"];
 
 let blocksMatrix: PIXI.Matrix;
+
+class Shape {
+  shapes: {x: number, y: number}[][];
+  constructor(shapeCoords: number[][], width: number) {
+    this.shapes = Array(4).fill(undefined).map(() => {
+      return Array(4).fill(undefined).map(() => {
+        return {x: 0, y: 0}
+      })
+    });
+
+    for (let i = 0; i < 4; i++) {
+      let x = shapeCoords[i][0];
+      let y = shapeCoords[i][1];
+      let max = (width == 3) ? 2 : 3;
+
+      this.shapes[0][i] = {
+        x: x,
+        y: 3 - y
+      }
+      this.shapes[1][i] = {
+        x: max - y,
+        y: 3 - x
+      }
+      this.shapes[2][i] = {
+        x: max - x,
+        y: 3 - (max - y)
+      }
+      this.shapes[3][i] = {
+        x: y,
+        y: 3 - (max - x)
+      }
+    }
+  }
+
+  get(rotation: number): {x: number, y: number}[] {
+    return this.shapes[rotation];
+  }
+}
+
+let shapes: {[key: string]: Shape} = {
+  I: new Shape([[0, 1], [1, 1], [2, 1], [3, 1]], 4),
+  O: new Shape([[1, 1], [1, 2], [2, 1], [2, 2]], 2),
+  T: new Shape([[1, 0], [0, 1], [1, 1], [2, 1]], 3),
+  L: new Shape([[2, 0], [0, 1], [1, 1], [2, 1]], 3),
+  J: new Shape([[0, 0], [0, 1], [1, 1], [2, 1]], 3),
+  S: new Shape([[1, 0], [2, 0], [0, 1], [1, 1]], 3),
+  Z: new Shape([[0, 0], [1, 0], [1, 1], [2, 1]], 3),
+}
+
+let shapeList = ["Z", "L", "O", "S", "I", "J", "T"];
+let shapeIds: {[key: string]: number} = {"Z": 1, "L": 2, "O": 3, "S": 4, "I": 5, "J": 6, "T": 7}
 
 onMounted(async () => {
   container = document.getElementById("tetgame");
@@ -122,7 +172,7 @@ function drawGrid() {
     .lineTo(left, bottom).lineTo(left, top).lineTo(0, top);
 }
 
-function drawBlock(blockId: number, ix: number, iy: number) {
+function drawBlock(blockId: number, bx: number, by: number) {
   let fWidth = fieldWidth;
   let fHeight = fieldWidth * 2;
   let gWidth = fieldWidth / 10;
@@ -132,8 +182,8 @@ function drawBlock(blockId: number, ix: number, iy: number) {
 
   if (1 <= blockId && blockId <= 8) {
     let texId = blockId - 1;
-    let x = left + gWidth * ix;
-    let y = bottom - gWidth * (iy + 1);
+    let x = left + gWidth * bx;
+    let y = bottom - gWidth * (by + 1);
 
     blocks.beginTextureFill({ texture: tex[blockTexId[texId]], matrix: blocksMatrix });
     blocks.drawRect(x, y, gWidth, gWidth);
@@ -141,11 +191,19 @@ function drawBlock(blockId: number, ix: number, iy: number) {
 }
 
 function drawFieldBlocks() {
-  for (let ix = 0; ix <= 9; ix++) {
-    for (let iy = 0; iy <= 22; iy++) {
+  for (let ix = 0; ix < 10; ix++) {
+    for (let iy = 0; iy < 23; iy++) {
       let blockId = blocksData[iy][ix];
       drawBlock(blockId, ix, iy);
     }
+  }
+}
+
+function drawPiece(shapeName: string, px: number, py: number, rotation: number) {
+  let shape = shapes[shapeName].get(rotation);
+  
+  for (let i = 0; i < 4; i++) {
+    drawBlock(shapeIds[shapeName], px + shape[i].x, py + shape[i].y);
   }
 }
 
