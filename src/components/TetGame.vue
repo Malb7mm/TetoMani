@@ -19,7 +19,7 @@ const INFO_PADDING_PX = 10;
 const PIECE_INITIAL_X = 3;
 const PIECE_INITIAL_Y = 17;
 const PIECE_INITIAL_Y_MAX = 18;
-const SHADOW_ALPHA = 0.4;
+const SHADOW_ALPHA = 0.25;
 
 let appHeight: number;
 let appWidth: number;
@@ -188,6 +188,7 @@ function refreshBlocks() {
   drawHold();
 
   drawPiece(curPiece, curX, curY, curRotation);
+  drawPiece(curPiece, curX, getGhostY(), curRotation, true);
 }
 
 function calcBlocksMatrix(): PIXI.Matrix {
@@ -325,7 +326,7 @@ function createBlockSprite(blockId: number, bxPx: number, byPx: number, size: nu
 
   if ((1 <= blockId && blockId <= 8) || (11 <= blockId && blockId <= 18)) {
     let texId = blockId - 1;
-    if (blockId > 10) blockId -= 10;
+    if (blockId > 10) texId -= 10;
 
     result = new PIXI.Sprite(tex[blockTexId[texId]]);
     result.position.set(bxPx, byPx);
@@ -471,6 +472,12 @@ function isOverlap(shapeName: string, px: number, py: number, rotation: number):
       return true;
   }
   return false;
+}
+
+function getGhostY(): number {
+  let cy;
+  for (cy = curY; !isOverlap(curPiece, curX, cy, curRotation); cy--);
+  return cy + 1;
 }
 
 
@@ -633,7 +640,9 @@ function drawLoop() {
 
 <template>
   <div id="tetgame"></div>
-  debugRef:<br>{{ debugRef }}<br>
+  <div id="debugref">
+    [Debug Information]<br>{{ debugRef }}<br>
+  </div>
 </template>
 
 <style scoped>
@@ -643,5 +652,11 @@ function drawLoop() {
   min-width: 100vh;
 
   border: solid 3px #cde;
+}
+#debugref {
+  font-family: 'M PLUS 1';
+  font-weight: 400;
+
+  right: 0;
 }
 </style>
