@@ -5,7 +5,15 @@ import { useActionStateStore } from '../stores/stores'
 
 const actionState = useActionStateStore();
 
-type xy = { x: number, y: number };
+class XY {
+  x: number = 0;
+  y: number = 0;
+
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
+}
 
 let container;
 let pixiapp: PIXI.Application<HTMLCanvasElement>;
@@ -74,14 +82,14 @@ let nextsBag: PieceBag;
 let genBag: PieceBag;
 
 class Shape {
-  shapes: xy[][];
-  center: xy;
+  shapes: XY[][];
+  center: XY;
 
-  constructor(shapeCoords: number[][], width: number, center: xy) {
+  constructor(shapeCoords: number[][], width: number, center: XY) {
     this.center = center;
     this.shapes = Array(4).fill(undefined).map(() => {
       return Array(4).fill(undefined).map(() => {
-        return { x: 0, y: 0 }
+        return new XY(0, 0)
       })
     });
 
@@ -119,7 +127,7 @@ class Shape {
     }
   }
 
-  get(rotation: number): xy[] {
+  get(rotation: number): XY[] {
     return this.shapes[rotation];
   }
 }
@@ -709,6 +717,65 @@ function moveHorizontal(dir: string): boolean {
   return result;
 }
 
+class KickTable {
+  cw: XY[][];
+  ccw: XY[][];
+
+  constructor(cw: XY[][], ccw: XY[][]) {
+    this.cw = cw;
+    this.ccw = ccw;
+  }
+
+  use(shapeName: string, px: number, py: number, rotation: number, dir: "cw" | "ccw"): { x: number, y: number, kick: number } | undefined {
+    let table = (dir == "cw") ? this.cw : this.ccw;
+    let dirR = (dir == "cw") ? 1 : -1;
+    let newRotation = (4 + rotation + dirR) % 4;
+    for (let i = 0; i <= 4; i++) {
+      let kx = table[rotation][i].x;
+      let ky = table[rotation][i].y;
+      if (isOverlap(shapeName, px + kx, py + ky, newRotation))
+        continue;
+      return { x: kx, y: ky, kick: i };
+    }
+    return undefined;
+  }
+}
+
+const srsTable: { [key: string]: KickTable } = {}
+
+srsTable.I = new KickTable(
+  [
+    [new XY(0, 0), new XY(-2, 0), new XY(1, 0), new XY(-2, -1), new XY(1, 2)],
+    [new XY(0, 0), new XY(-1, 0), new XY(2, 0), new XY(-1, 2), new XY(2, -1)],
+    [new XY(0, 0), new XY(2, 0), new XY(-1, 0), new XY(2, 1), new XY(-1, -2)],
+    [new XY(0, 0), new XY(1, 0), new XY(-2, 0), new XY(1, -2), new XY(-2, 1)],
+  ],
+  [
+    [new XY(0, 0), new XY(-1, 0), new XY(2, 0), new XY(-1, 2), new XY(2, -1)],
+    [new XY(0, 0), new XY(2, 0), new XY(-1, 0), new XY(2, 1), new XY(-1, -2)],
+    [new XY(0, 0), new XY(1, 0), new XY(-2, 0), new XY(1, -2), new XY(-2, 1)],
+    [new XY(0, 0), new XY(-2, 0), new XY(1, 0), new XY(-2, -1), new XY(1, 2)],
+  ],
+);
+srsTable.T = new KickTable(
+  [
+    [new XY(0, 0), new XY(-1, 0), new XY(-1, 1), new XY(0, -2), new XY(-1, -2)],
+    [new XY(0, 0), new XY(1, 0), new XY(1, -1), new XY(0, 2), new XY(1, 2)],
+    [new XY(0, 0), new XY(1, 0), new XY(1, 1), new XY(0, -2), new XY(1, -2)],
+    [new XY(0, 0), new XY(-1, 0), new XY(-1, -1), new XY(0, 2), new XY(-1, 2)],
+  ],
+  [
+    [new XY(0, 0), new XY(1, 0), new XY(1, 1), new XY(0, -2), new XY(1, -2)],
+    [new XY(0, 0), new XY(1, 0), new XY(1, -1), new XY(0, 2), new XY(1, 2)],
+    [new XY(0, 0), new XY(-1, 0), new XY(-1, 1), new XY(0, -2), new XY(-1, -2)],
+    [new XY(0, 0), new XY(-1, 0), new XY(-1, -1), new XY(0, 2), new XY(-1, 2)],
+  ],
+);
+srsTable.L = srsTable.T;
+srsTable.J = srsTable.T;
+srsTable.S = srsTable.T;
+srsTable.Z = srsTable.T;
+
 let prevClockwise = false;
 let prevCountercw = false;
 
@@ -730,15 +797,20 @@ function manageRotate() {
   prevCountercw = countercw;
 }
 
-function rotate(dir: string): boolean {
+function rotate(dir: "cw" | "ccw"): boolean {
   if (curPiece == "O")
     return false;
+
   let dirR = (dir == "cw") ? 1 : -1;
   let newRotation = (4 + curRotation + dirR) % 4;
-  let result = !isOverlap(curPiece, curX, curY, newRotation);
-  if (result)
-    curRotation = newRotation;
-  return result;
+  let result = srsTable[curPiece].use(curPiece, curX, curY, curRotation, dir);
+  if (result === undefined)
+    return false;
+
+  curRotation = newRotation;
+  curX += result.x;
+  curY += result.y;
+  return true;
 }
 
 let holdActive = true;
