@@ -15,10 +15,6 @@ class XY {
   }
 }
 
-let container;
-let pixiapp: PIXI.Application<HTMLCanvasElement>;
-let gameLoopInterval: number;
-
 class FpsCounter {
   fpsMeasureBegin: number = Date.now();
   fpsCount: number = 0;
@@ -34,52 +30,6 @@ class FpsCounter {
     return this.fpsValue;
   }
 }
-
-function sequential(first: number, length: number) {
-  return new Array(length).fill(first).map((x, i) => x + i);
-}
-
-const FIELD_HEIGHT_SCALE = 0.8;
-const NEXT_COUNT = 5;
-const INFO_PIECE_HEIGHT_SCALE = 0.13;
-const INFO_DISTANCE_PX = 10;
-const INFO_PADDING_PX = 10;
-const PIECE_INITIAL_X = 3;
-const PIECE_INITIAL_Y = 17;
-const PIECE_INITIAL_Y_MAX = 18;
-const SHADOW_ALPHA = 0.25;
-const HARDDROP_COOLDOWN = 100;
-const LOCKDOWN_AVOID_LIMIT = 15;
-const LOCKDOWN_DELAY = 500;
-
-let appHeight: number;
-let appWidth: number;
-let fieldWidth: number;
-let fieldHeight: number;
-
-let field: PIXI.Graphics;
-let grid: PIXI.Graphics;
-let blocks: PIXI.Container;
-
-let uis: PIXI.Graphics;
-let infoBlocks: PIXI.Container;
-
-let blocksData: number[][];
-
-let tex: { [key: string]: PIXI.Texture } = {};
-const blockTexId = ["bRed", "bOrange", "bYellow", "bGreen", "bBlue", "bCyan", "bPurple", "bGray"];
-
-let blocksMatrix: PIXI.Matrix;
-
-let curX: number;
-let curY: number;
-let curPiece: string;
-let curRotation: number;
-
-let holdPiece: string;
-
-let nextsBag: PieceBag;
-let genBag: PieceBag;
 
 class Shape {
   shapes: XY[][];
@@ -132,7 +82,7 @@ class Shape {
   }
 }
 
-let shapes: { [key: string]: Shape } = {
+const shapes: { [key: string]: Shape } = {
   I: new Shape([[0, 1], [1, 1], [2, 1], [3, 1]], 4, { x: 2, y: 0.5 }),
   O: new Shape([[1, 0], [1, 1], [2, 0], [2, 1]], 2, { x: 2, y: 1 }),
   T: new Shape([[1, 0], [0, 1], [1, 1], [2, 1]], 3, { x: 1.5, y: 1 }),
@@ -142,8 +92,149 @@ let shapes: { [key: string]: Shape } = {
   Z: new Shape([[0, 0], [1, 0], [1, 1], [2, 1]], 3, { x: 1.5, y: 1 }),
 }
 
-let shapeList = ["Z", "L", "O", "S", "I", "J", "T"];
-let shapeIds: { [key: string]: number } = { "Z": 1, "L": 2, "O": 3, "S": 4, "I": 5, "J": 6, "T": 7 }
+const shapeList = ["Z", "L", "O", "S", "I", "J", "T"];
+const shapeIds: { [key: string]: number } = { "Z": 1, "L": 2, "O": 3, "S": 4, "I": 5, "J": 6, "T": 7 }
+
+class PieceBag {
+  pieces: string[];
+  count: number;
+
+  constructor() {
+    this.pieces = [];
+    this.count = 0;
+    this.generate();
+  }
+
+  isEmpty(): boolean {
+    return this.count == 0;
+  }
+
+  generate() {
+    this.pieces = [...shapeList];
+    for (let i = shapeList.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = this.pieces[i];
+      this.pieces[i] = this.pieces[j];
+      this.pieces[j] = tmp;
+    }
+    this.count = 7;
+  }
+
+  dequeue(): string | undefined {
+    this.count--;
+    return this.pieces.shift();
+  }
+
+  enqueue(bag: PieceBag): void;
+  enqueue(piece: string): void;
+  enqueue(pieces: PieceBag | string) {
+    if (pieces instanceof PieceBag) {
+      this.pieces = this.pieces.concat(v.genBag.pieces);
+      this.count += v.genBag.count;
+    } else {
+      this.pieces.push(pieces);
+      this.count += 1;
+    }
+  }
+}
+
+class KickTable {
+  cw: XY[][];
+  ccw: XY[][];
+
+  constructor(cw: XY[][], ccw: XY[][]) {
+    this.cw = cw;
+    this.ccw = ccw;
+  }
+
+  use(shapeName: string, px: number, py: number, rotation: number, dir: "cw" | "ccw"): { x: number, y: number, kick: number } | undefined {
+    let table = (dir == "cw") ? this.cw : this.ccw;
+    let dirR = (dir == "cw") ? 1 : -1;
+    let newRotation = (4 + rotation + dirR) % 4;
+    for (let i = 0; i <= 4; i++) {
+      let kx = table[rotation][i].x;
+      let ky = table[rotation][i].y;
+      if (isOverlap(shapeName, px + kx, py + ky, newRotation))
+        continue;
+      return { x: kx, y: ky, kick: i };
+    }
+    return undefined;
+  }
+}
+
+class GameVariables {
+  curX: number = PIECE_INITIAL_X;
+  curY: number = PIECE_INITIAL_Y;
+  curPiece: string = "I";
+  curRotation: number = 0;
+
+  holdPiece: string | undefined = undefined;
+
+  nextsBag: PieceBag = new PieceBag();
+  genBag: PieceBag = new PieceBag();
+
+  lastGravityfall: number | undefined = undefined;
+  lockdownTimerBegin: number | undefined = undefined;
+  lockdownAvoid: number = 0;
+  reachedHeight: number = PIECE_INITIAL_Y_MAX;
+
+  prevHarddropact: boolean = false;
+  lastHarddrop: number | undefined = undefined;
+
+  keydownSince: { [key: string]: number | undefined; } = {
+    "left": undefined,
+    "right": undefined
+  }
+  dasSince: number | undefined = undefined;
+  lastMoved: number | "once" | "notyet" = "notyet";
+  lastDir: string | undefined = undefined;
+
+  prevClockwise: boolean = false;
+  prevCountercw: boolean = false;
+
+  holdActive: boolean = true;
+  prevHoldact: boolean = false;
+};
+
+const v = new GameVariables();
+
+let container;
+let pixiapp: PIXI.Application<HTMLCanvasElement>;
+let gameLoopInterval: number;
+
+function sequential(first: number, length: number) {
+  return new Array(length).fill(first).map((x, i) => x + i);
+}
+
+const FIELD_HEIGHT_SCALE = 0.8;
+const NEXT_COUNT = 5;
+const INFO_PIECE_HEIGHT_SCALE = 0.13;
+const INFO_DISTANCE_PX = 10;
+const INFO_PADDING_PX = 10;
+const PIECE_INITIAL_X = 3;
+const PIECE_INITIAL_Y = 17;
+const PIECE_INITIAL_Y_MAX = 18;
+const SHADOW_ALPHA = 0.25;
+const HARDDROP_COOLDOWN = 100;
+const LOCKDOWN_AVOID_LIMIT = 15;
+const LOCKDOWN_DELAY = 500;
+
+let appHeight: number;
+let appWidth: number;
+let fieldWidth: number;
+let fieldHeight: number;
+
+let field: PIXI.Graphics;
+let grid: PIXI.Graphics;
+let blocks: PIXI.Container;
+
+let uis: PIXI.Graphics;
+let infoBlocks: PIXI.Container;
+
+let blocksData: number[][];
+
+let tex: { [key: string]: PIXI.Texture } = {};
+const blockTexId = ["bRed", "bOrange", "bYellow", "bGreen", "bBlue", "bCyan", "bPurple", "bGray"];
 
 onMounted(async () => {
   container = document.getElementById("tetgame");
@@ -165,7 +256,8 @@ onMounted(async () => {
     tex[blockTexId[i]] = await PIXI.Assets.load(`/img/game/${blockTexSrc[i]}.png`);
   }
 
-  init();
+  initDraw();
+  initGame();
 });
 
 onUnmounted(() => {
@@ -178,7 +270,7 @@ function destroy() {
   clearInterval(gameLoopInterval);
 }
 
-function init() {
+function initDraw() {
   field = new PIXI.Graphics();
   grid = new PIXI.Graphics();
   blocks = new PIXI.Graphics();
@@ -195,19 +287,9 @@ function init() {
 
   field.position.set(appWidth / 2, appHeight / 2);
 
-  blocksMatrix = calcBlocksMatrix();
-
   drawField();
   drawGrid();
   drawUIField();
-
-  nextsBag = new PieceBag();
-  genBag = new PieceBag();
-  curPiece = pullNextPiece();
-  initPiece();
-
-  gameLoopInterval = setInterval(gameLoop, 1);
-  pixiapp.ticker.add(drawLoop);
 }
 
 function refreshBlocks() {
@@ -218,17 +300,8 @@ function refreshBlocks() {
   drawNextList();
   drawHold();
 
-  drawPiece(curPiece, curX, curY, curRotation);
-  drawPiece(curPiece, curX, getGhostY(), curRotation, true);
-}
-
-function calcBlocksMatrix(): PIXI.Matrix {
-  let gWidth = fieldWidth / 10;
-
-  let texWidth = tex[blockTexId[0]].width;
-  let applyScale = gWidth / texWidth;
-
-  return new PIXI.Matrix(applyScale, 0, 0, applyScale, 0, 0);
+  drawPiece(v.curPiece, v.curX, v.curY, v.curRotation);
+  drawPiece(v.curPiece, v.curX, getGhostY(), v.curRotation, true);
 }
 
 function drawField() {
@@ -391,68 +464,25 @@ function createPieceSprite(shapeName: string, pxPx: number, pyPx: number, rotati
   return result;
 }
 
-class PieceBag {
-  pieces: string[];
-  count: number;
-
-  constructor() {
-    this.pieces = [];
-    this.count = 0;
-    this.generate();
-  }
-
-  isEmpty(): boolean {
-    return this.count == 0;
-  }
-
-  generate() {
-    this.pieces = [...shapeList];
-    for (let i = shapeList.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = this.pieces[i];
-      this.pieces[i] = this.pieces[j];
-      this.pieces[j] = tmp;
-    }
-    this.count = 7;
-  }
-
-  dequeue(): string | undefined {
-    this.count--;
-    return this.pieces.shift();
-  }
-
-  enqueue(bag: PieceBag): void;
-  enqueue(piece: string): void;
-  enqueue(pieces: PieceBag | string) {
-    if (pieces instanceof PieceBag) {
-      this.pieces = this.pieces.concat(genBag.pieces);
-      this.count += genBag.count;
-    } else {
-      this.pieces.push(pieces);
-      this.count += 1;
-    }
-  }
-}
-
 function pullNextPiece(): string {
-  if (nextsBag.count == 0) {
-    genBag.generate();
-    nextsBag.enqueue(genBag);
+  if (v.nextsBag.count == 0) {
+    v.genBag.generate();
+    v.nextsBag.enqueue(v.genBag);
   }
 
-  let result = nextsBag.dequeue();
+  let result = v.nextsBag.dequeue();
   if (result === undefined)
     throw Error;
   return result;
 }
 
 function getNextList(): string[] {
-  if (nextsBag.count < NEXT_COUNT) {
-    genBag.generate();
-    nextsBag.enqueue(genBag);
+  if (v.nextsBag.count < NEXT_COUNT) {
+    v.genBag.generate();
+    v.nextsBag.enqueue(v.genBag);
   }
 
-  return nextsBag.pieces.slice(0, NEXT_COUNT);
+  return v.nextsBag.pieces.slice(0, NEXT_COUNT);
 }
 
 function drawNextList() {
@@ -472,21 +502,21 @@ function drawNextList() {
 }
 
 function drawHold() {
-  if (holdPiece === undefined) return;
+  if (v.holdPiece === undefined) return;
 
   let size = fieldHeight * INFO_PIECE_HEIGHT_SCALE / 3;
   let x = -(fieldWidth / 2 + INFO_DISTANCE_PX + INFO_PADDING_PX + size * 2);
   let y = -fieldHeight / 2;
 
-  let shapeName = holdPiece;
+  let shapeName = v.holdPiece;
   let sprite = createPieceSprite(shapeName, x, y, 0, size);
   infoBlocks.addChild(sprite);
 }
 
 function initPiece() {
-  curX = PIECE_INITIAL_X;
-  curY = PIECE_INITIAL_Y;
-  curRotation = 0;
+  v.curX = PIECE_INITIAL_X;
+  v.curY = PIECE_INITIAL_Y;
+  v.curRotation = 0;
 }
 
 function isOverlap(shapeName: string, px: number, py: number, rotation: number): boolean {
@@ -507,7 +537,7 @@ function isOverlap(shapeName: string, px: number, py: number, rotation: number):
 
 function getGhostY(): number {
   let cy;
-  for (cy = curY; !isOverlap(curPiece, curX, cy, curRotation); cy--);
+  for (cy = v.curY; !isOverlap(v.curPiece, v.curX, cy, v.curRotation); cy--);
   return cy + 1;
 }
 
@@ -529,10 +559,30 @@ function elapsed(time: number | undefined): number {
   return nowtime() - time;
 }
 
-let gameloop = new FpsCounter();
+function initGame() {
+  v.nextsBag = new PieceBag();
+  v.genBag = new PieceBag();
+  v.curPiece = pullNextPiece();
+  initPiece();
+
+  registerLoop();
+}
+
+function resumeGame() {
+  v.genBag = new PieceBag();
+
+  registerLoop();
+}
+
+function registerLoop() {
+  gameLoopInterval = setInterval(gameLoop, 1);
+  pixiapp.ticker.add(drawLoop);
+}
+
+let gameloopFps = new FpsCounter();
 
 function gameLoop() {
-  debugRef.value["gameloop"] = gameloop.get();
+  debugRef.value["gameloop"] = gameloopFps.get();
   manageGravity();
   manageHarddrop();
   manageMoveHorizontal();
@@ -575,134 +625,119 @@ function placePiece(shapeName: string, px: number, py: number, rotation: number)
 }
 
 function lockdown() {
-  placePiece(curPiece, curX, curY, curRotation);
-  curPiece = pullNextPiece();
+  placePiece(v.curPiece, v.curX, v.curY, v.curRotation);
+  v.curPiece = pullNextPiece();
   initPiece();
-  lastGravityfall = nowtime();
-  lockdownTimerBegin = undefined;
-  lockdownAvoid = 0;
-  reachedHeight = PIECE_INITIAL_Y_MAX;
-  holdActive = true;
+  v.lastGravityfall = nowtime();
+  v.lockdownTimerBegin = undefined;
+  v.lockdownAvoid = 0;
+  v.reachedHeight = PIECE_INITIAL_Y_MAX;
+  v.holdActive = true;
 }
 
 let gravity = 800;
-let lastGravityfall: number = nowtime();
-let lockdownTimerBegin: number | undefined = nowtime();
-let lockdownAvoid = 0;
-let reachedHeight = PIECE_INITIAL_Y_MAX;
 
 function manageGravity() {
   let softdrop = actionState.value["softdrop"];
   let gravityInterval = gravity;
   gravityInterval /= (softdrop) ? softDropFactor : 1;
 
-  if (isOverlap(curPiece, curX, curY - 1, curRotation)) {
+  if (isOverlap(v.curPiece, v.curX, v.curY - 1, v.curRotation)) {
     // 接地してる
-    if (lockdownTimerBegin === undefined)
-      lockdownTimerBegin = nowtime();
-    if (elapsed(lockdownTimerBegin) >= LOCKDOWN_DELAY) {
+    if (v.lockdownTimerBegin === undefined)
+      v.lockdownTimerBegin = nowtime();
+    if (elapsed(v.lockdownTimerBegin) >= LOCKDOWN_DELAY) {
       lockdown();
     }
   } else {
     // 接地してない
-    lockdownTimerBegin = undefined;
-    if (elapsed(lastGravityfall) >= gravityInterval) {
-      curY -= 1;
-      if (curY < reachedHeight) {
-        reachedHeight = curY;
-        lockdownAvoid = 0;
+    v.lockdownTimerBegin = undefined;
+    if (elapsed(v.lastGravityfall) >= gravityInterval) {
+      v.curY -= 1;
+      if (v.curY < v.reachedHeight) {
+        v.reachedHeight = v.curY;
+        v.lockdownAvoid = 0;
       }
-      lastGravityfall = nowtime();
+      v.lastGravityfall = nowtime();
     }
   }
 }
 
 function addLockdownAvoid() {
-  if (lockdownTimerBegin === undefined)
+  if (v.lockdownTimerBegin === undefined)
     return;
-  if (lockdownAvoid >= LOCKDOWN_AVOID_LIMIT)
+  if (v.lockdownAvoid >= LOCKDOWN_AVOID_LIMIT)
     return;
 
-  lockdownAvoid++;
-  lockdownTimerBegin = nowtime();
+  v.lockdownAvoid++;
+  v.lockdownTimerBegin = nowtime();
 }
-
-let prevHarddropact: boolean;
-let lastHarddrop: number = nowtime();
 
 function manageHarddrop() {
   let harddropact = actionState.value["harddrop"];
 
-  if (!prevHarddropact && harddropact && elapsed(lastHarddrop) >= HARDDROP_COOLDOWN) {
-    lastHarddrop = nowtime();
+  if (!v.prevHarddropact && harddropact && elapsed(v.lastHarddrop) >= HARDDROP_COOLDOWN) {
+    v.lastHarddrop = nowtime();
     harddrop();
   }
 
-  prevHarddropact = harddropact;
+  v.prevHarddropact = harddropact;
 }
 
 function harddrop() {
-  curY = getGhostY();
+  v.curY = getGhostY();
   lockdown();
 }
-
-let keydownSince: { [key: string]: number | undefined; } = {
-  "left": undefined,
-  "right": undefined
-}
-let dasSince: number;
-let lastMoved: number | "once" | "notyet" = "notyet";
-let lastDir: string | undefined = undefined;
 
 function manageMoveHorizontal() {
   let moveDir: string | undefined = undefined;
   let result = false;
 
   for (let dir of ["left", "right"]) {
-    if (actionState.value[dir] && keydownSince[dir] === undefined)
-      keydownSince[dir] = nowtime();
-    if (!actionState.value[dir] && keydownSince[dir] !== undefined)
-      keydownSince[dir] = undefined;
+    if (actionState.value[dir] && v.keydownSince[dir] === undefined)
+      v.keydownSince[dir] = nowtime();
+    if (!actionState.value[dir] && v.keydownSince[dir] !== undefined)
+      v.keydownSince[dir] = undefined;
   }
 
   for (let dir of ["left", "right"]) {
     let counterDir = (dir == "left") ? "right" : "left";
 
-    if (keydownSince[dir] !== undefined &&
-      (keydownSince[counterDir] === undefined || keydownSince[dir]! > keydownSince[counterDir]!)) {
+    if (v.keydownSince[dir] !== undefined &&
+      (v.keydownSince[counterDir] === undefined || v.keydownSince[dir]! > v.keydownSince[counterDir]!)) {
       moveDir = dir;
     }
   }
 
   if (moveDir === undefined) {
-    lastMoved = "notyet";
-    lastDir = undefined;
+    v.lastMoved = "notyet";
+    v.lastDir = undefined;
     return;
   }
 
-  if (lastDir != moveDir) {
-    lastMoved = "notyet";
-    dasSince = nowtime();
+  if (v.lastDir != moveDir) {
+    v.lastMoved = "notyet";
+    v.dasSince = nowtime();
   }
-  lastDir = moveDir;
+  v.lastDir = moveDir;
   debugRef.value["moveDir"] = moveDir;
 
   let dasMs = Math.floor(delayedAutoShift * (1000 / 60));
   let arrMs = Math.floor(autoRepeatRate * (1000 / 60));
 
-  if (lastMoved == "notyet") {
+  if (v.lastMoved == "notyet") {
     result = moveHorizontal(moveDir);
-    lastMoved = "once";
+    v.lastMoved = "once";
   }
-  else if (lastMoved == "once") {
-    if (elapsed(dasSince) >= dasMs) {
+  else if (v.lastMoved == "once") {
+    if (elapsed(v.dasSince) >= dasMs) {
       result = moveHorizontal(moveDir);
-      lastMoved = nowtime();
+      v.lastMoved = nowtime();
     }
   }
-  else if (elapsed(lastMoved) >= arrMs) {
+  else if (elapsed(v.lastMoved) >= arrMs) {
     result = moveHorizontal(moveDir);
-    lastMoved = nowtime();
+    v.lastMoved = nowtime();
   }
 
   if (result)
@@ -711,34 +746,10 @@ function manageMoveHorizontal() {
 
 function moveHorizontal(dir: string): boolean {
   let dirX = (dir == "left") ? -1 : 1
-  let result = !isOverlap(curPiece, curX + dirX, curY, curRotation);
+  let result = !isOverlap(v.curPiece, v.curX + dirX, v.curY, v.curRotation);
   if (result)
-    curX += dirX;
+    v.curX += dirX;
   return result;
-}
-
-class KickTable {
-  cw: XY[][];
-  ccw: XY[][];
-
-  constructor(cw: XY[][], ccw: XY[][]) {
-    this.cw = cw;
-    this.ccw = ccw;
-  }
-
-  use(shapeName: string, px: number, py: number, rotation: number, dir: "cw" | "ccw"): { x: number, y: number, kick: number } | undefined {
-    let table = (dir == "cw") ? this.cw : this.ccw;
-    let dirR = (dir == "cw") ? 1 : -1;
-    let newRotation = (4 + rotation + dirR) % 4;
-    for (let i = 0; i <= 4; i++) {
-      let kx = table[rotation][i].x;
-      let ky = table[rotation][i].y;
-      if (isOverlap(shapeName, px + kx, py + ky, newRotation))
-        continue;
-      return { x: kx, y: ky, kick: i };
-    }
-    return undefined;
-  }
 }
 
 const srsTable: { [key: string]: KickTable } = {}
@@ -776,67 +787,61 @@ srsTable.J = srsTable.T;
 srsTable.S = srsTable.T;
 srsTable.Z = srsTable.T;
 
-let prevClockwise = false;
-let prevCountercw = false;
-
 function manageRotate() {
   let clockwise = actionState.value["rotatecw"];
   let countercw = actionState.value["rotateccw"];
   let result = false;
 
-  if (!prevClockwise && clockwise) {
+  if (!v.prevClockwise && clockwise) {
     result = rotate("cw");
   }
-  else if (!prevCountercw && countercw) {
+  else if (!v.prevCountercw && countercw) {
     result = rotate("ccw");
   }
   if (result)
     addLockdownAvoid();
 
-  prevClockwise = clockwise;
-  prevCountercw = countercw;
+  v.prevClockwise = clockwise;
+  v.prevCountercw = countercw;
 }
 
 function rotate(dir: "cw" | "ccw"): boolean {
-  if (curPiece == "O")
+  if (v.curPiece == "O")
     return false;
 
   let dirR = (dir == "cw") ? 1 : -1;
-  let newRotation = (4 + curRotation + dirR) % 4;
-  let result = srsTable[curPiece].use(curPiece, curX, curY, curRotation, dir);
+  let newRotation = (4 + v.curRotation + dirR) % 4;
+  let result = srsTable[v.curPiece].use(v.curPiece, v.curX, v.curY, v.curRotation, dir);
   if (result === undefined)
     return false;
 
-  curRotation = newRotation;
-  curX += result.x;
-  curY += result.y;
+  v.curRotation = newRotation;
+  v.curX += result.x;
+  v.curY += result.y;
   return true;
 }
 
-let holdActive = true;
-let prevHoldact = false;
-
 function manageSwapHold() {
-  if (!holdActive)
+  if (!v.holdActive)
     return;
 
   let holdact = actionState.value["hold"];
 
-  if (!prevHoldact && holdact) {
+  if (!v.prevHoldact && holdact) {
     swapHold();
-    holdActive = false;
+    v.holdActive = false;
   }
 
-  prevHoldact = holdact;
+  v.prevHoldact = holdact;
 }
 
 function swapHold() {
-  let tmp = holdPiece;
-  holdPiece = curPiece;
+  let tmp = v.holdPiece;
+  v.holdPiece = v.curPiece;
   if (tmp === undefined)
-    curPiece = pullNextPiece();
+    v.curPiece = pullNextPiece();
   else
-    curPiece = tmp;
+    v.curPiece = tmp;
 
   initPiece();
 }
@@ -862,8 +867,6 @@ function drawLoop() {
   user-select: none;
   min-height: 90vh;
   min-width: 100vh;
-
-  border: solid 3px #cde;
 }
 
 #debugref {
