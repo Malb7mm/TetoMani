@@ -648,6 +648,7 @@ let lastDir: string | undefined = undefined;
 
 function manageMoveHorizontal() {
   let moveDir: string | undefined = undefined;
+  let result = false;
 
   for (let dir of ["left", "right"]) {
     if (actionState.value[dir] && keydownSince[dir] === undefined)
@@ -674,7 +675,6 @@ function manageMoveHorizontal() {
   if (lastDir != moveDir) {
     lastMoved = "notyet";
     dasSince = nowtime();
-    addLockdownAvoid();
   }
   lastDir = moveDir;
   debugRef.value["moveDir"] = moveDir;
@@ -683,19 +683,22 @@ function manageMoveHorizontal() {
   let arrMs = Math.floor(autoRepeatRate * (1000 / 60));
 
   if (lastMoved == "notyet") {
-    moveHorizontal(moveDir);
+    result = moveHorizontal(moveDir);
     lastMoved = "once";
   }
   else if (lastMoved == "once") {
     if (elapsed(dasSince) >= dasMs) {
-      moveHorizontal(moveDir);
+      result = moveHorizontal(moveDir);
       lastMoved = nowtime();
     }
   }
   else if (elapsed(lastMoved) >= arrMs) {
-    moveHorizontal(moveDir);
+    result = moveHorizontal(moveDir);
     lastMoved = nowtime();
   }
+
+  if (result)
+    addLockdownAvoid();
 }
 
 function moveHorizontal(dir: string): boolean {
@@ -712,21 +715,24 @@ let prevCountercw = false;
 function manageRotate() {
   let clockwise = actionState.value["rotatecw"];
   let countercw = actionState.value["rotateccw"];
+  let result = false;
 
   if (!prevClockwise && clockwise) {
-    rotate("cw");
-    addLockdownAvoid();
+    result = rotate("cw");
   }
   else if (!prevCountercw && countercw) {
-    rotate("ccw");
-    addLockdownAvoid();
+    result = rotate("ccw");
   }
+  if (result)
+    addLockdownAvoid();
 
   prevClockwise = clockwise;
   prevCountercw = countercw;
 }
 
 function rotate(dir: string): boolean {
+  if (curPiece == "O")
+    return false;
   let dirR = (dir == "cw") ? 1 : -1;
   let newRotation = (4 + curRotation + dirR) % 4;
   let result = !isOverlap(curPiece, curX, curY, newRotation);
