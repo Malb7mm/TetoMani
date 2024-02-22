@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import * as PIXI from "pixi.js";
 import { onMounted, onUnmounted } from "vue";
+import { useActionStateStore } from '../stores/stores'
 
-type xy = {x: number, y: number};
+const actionState = useActionStateStore();
+
+type xy = { x: number, y: number };
 
 let container;
 let pixiapp: PIXI.Application<HTMLCanvasElement>;
@@ -12,6 +15,9 @@ const NEXT_COUNT = 5;
 const INFO_PIECE_HEIGHT_SCALE = 0.13;
 const INFO_DISTANCE_PX = 10;
 const INFO_PADDING_PX = 10;
+const PIECE_INITIAL_X = 3;
+const PIECE_INITIAL_Y = 17;
+const PIECE_INITIAL_Y_MAX = 18;
 
 let appHeight: number;
 let appWidth: number;
@@ -32,6 +38,16 @@ const blockTexId = ["bRed", "bOrange", "bYellow", "bGreen", "bBlue", "bCyan", "b
 
 let blocksMatrix: PIXI.Matrix;
 
+let curX: number;
+let curY: number;
+let curPiece: string;
+let curRotation: number;
+
+let holdPiece: string;
+
+let nextsBag: PieceBag;
+let genBag: PieceBag;
+
 class Shape {
   shapes: xy[][];
   center: xy;
@@ -40,30 +56,40 @@ class Shape {
     this.center = center;
     this.shapes = Array(4).fill(undefined).map(() => {
       return Array(4).fill(undefined).map(() => {
-        return {x: 0, y: 0}
+        return { x: 0, y: 0 }
       })
     });
 
     for (let i = 0; i < 4; i++) {
       let x = shapeCoords[i][0];
       let y = shapeCoords[i][1];
-      let max = (width == 3) ? 2 : 3;
+      if (width == 2) {
+        for (let j = 0; j < 4; j++) {
+          this.shapes[j][i] = {
+            x: x,
+            y: 3 - y
+          }
+        }
+      } else {
+        let max = width - 1;
 
-      this.shapes[0][i] = {
-        x: x,
-        y: 3 - y
-      }
-      this.shapes[1][i] = {
-        x: max - y,
-        y: 3 - x
-      }
-      this.shapes[2][i] = {
-        x: max - x,
-        y: 3 - (max - y)
-      }
-      this.shapes[3][i] = {
-        x: y,
-        y: 3 - (max - x)
+        this.shapes[0][i] = {
+          x: x,
+          y: 3 - y
+        }
+        this.shapes[1][i] = {
+          x: max - y,
+          y: 3 - x
+        }
+        this.shapes[2][i] = {
+          x: max - x,
+          y: 3 - (max - y)
+        }
+        this.shapes[3][i] = {
+          x: y,
+          y: 3 - (max - x)
+        }
+
       }
     }
   }
@@ -73,18 +99,18 @@ class Shape {
   }
 }
 
-let shapes: {[key: string]: Shape} = {
-  I: new Shape([[0, 1], [1, 1], [2, 1], [3, 1]], 4, {x: 2, y: 0.5}),
-  O: new Shape([[1, 1], [1, 2], [2, 1], [2, 2]], 2, {x: 2, y: 0}),
-  T: new Shape([[1, 0], [0, 1], [1, 1], [2, 1]], 3, {x: 1.5, y: 1}),
-  L: new Shape([[2, 0], [0, 1], [1, 1], [2, 1]], 3, {x: 1.5, y: 1}),
-  J: new Shape([[0, 0], [0, 1], [1, 1], [2, 1]], 3, {x: 1.5, y: 1}),
-  S: new Shape([[1, 0], [2, 0], [0, 1], [1, 1]], 3, {x: 1.5, y: 1}),
-  Z: new Shape([[0, 0], [1, 0], [1, 1], [2, 1]], 3, {x: 1.5, y: 1}),
+let shapes: { [key: string]: Shape } = {
+  I: new Shape([[0, 1], [1, 1], [2, 1], [3, 1]], 4, { x: 2, y: 0.5 }),
+  O: new Shape([[1, 0], [1, 1], [2, 0], [2, 1]], 2, { x: 2, y: 1 }),
+  T: new Shape([[1, 0], [0, 1], [1, 1], [2, 1]], 3, { x: 1.5, y: 1 }),
+  L: new Shape([[2, 0], [0, 1], [1, 1], [2, 1]], 3, { x: 1.5, y: 1 }),
+  J: new Shape([[0, 0], [0, 1], [1, 1], [2, 1]], 3, { x: 1.5, y: 1 }),
+  S: new Shape([[1, 0], [2, 0], [0, 1], [1, 1]], 3, { x: 1.5, y: 1 }),
+  Z: new Shape([[0, 0], [1, 0], [1, 1], [2, 1]], 3, { x: 1.5, y: 1 }),
 }
 
 let shapeList = ["Z", "L", "O", "S", "I", "J", "T"];
-let shapeIds: {[key: string]: number} = {"Z": 1, "L": 2, "O": 3, "S": 4, "I": 5, "J": 6, "T": 7}
+let shapeIds: { [key: string]: number } = { "Z": 1, "L": 2, "O": 3, "S": 4, "I": 5, "J": 6, "T": 7 }
 
 onMounted(async () => {
   container = document.getElementById("tetgame");
@@ -143,14 +169,11 @@ function init() {
 
   nextsBag = new PieceBag();
   genBag = new PieceBag();
+  curPiece = pullNextPiece();
+  initPiece();
 
-  refreshBlocks();
-
-  pixiapp.ticker.add(update);
-}
-
-function update(delta: number) {
-  refreshBlocks();
+  setInterval(gameLoop, 1)
+  pixiapp.ticker.add(drawLoop);
 }
 
 function refreshBlocks() {
@@ -159,6 +182,9 @@ function refreshBlocks() {
 
   infoBlocks.removeChildren();
   drawNextList();
+  drawHold();
+
+  drawPiece(curPiece, curX, curY, curRotation);
 }
 
 function calcBlocksMatrix(): PIXI.Matrix {
@@ -258,6 +284,34 @@ function drawBlock(blockId: number, bx: number, by: number) {
   }
 }
 
+function blockX(px: number, bx: number): number {
+  return px + bx;
+}
+
+function blockY(py: number, by: number): number {
+  return py + by;
+}
+
+/**
+ * ピースの4x4範囲のうち、**左下**を指定します
+ */
+function drawPiece(shapeName: string, px: number, py: number, rotation: number) {
+  let shape = shapes[shapeName].get(rotation);
+
+  for (let i = 0; i < 4; i++) {
+    drawBlock(shapeIds[shapeName], blockX(px, shape[i].x), blockY(py, shape[i].y));
+  }
+}
+
+function drawFieldBlocks() {
+  for (let ix = 0; ix < 10; ix++) {
+    for (let iy = 0; iy < 23; iy++) {
+      let blockId = blocksData[iy][ix];
+      drawBlock(blockId, ix, iy);
+    }
+  }
+}
+
 function createBlockSprite(blockId: number, bxPx: number, byPx: number, size: number): PIXI.Sprite | undefined {
   let result: PIXI.Sprite;
 
@@ -274,33 +328,16 @@ function createBlockSprite(blockId: number, bxPx: number, byPx: number, size: nu
   return undefined;
 }
 
-function drawFieldBlocks() {
-  for (let ix = 0; ix < 10; ix++) {
-    for (let iy = 0; iy < 23; iy++) {
-      let blockId = blocksData[iy][ix];
-      drawBlock(blockId, ix, iy);
-    }
-  }
-}
-
-function drawPiece(shapeName: string, px: number, py: number, rotation: number) {
-  let shape = shapes[shapeName].get(rotation);
-  
-  for (let i = 0; i < 4; i++) {
-    drawBlock(shapeIds[shapeName], px + shape[i].x, py + shape[i].y);
-  }
-}
-
 function createPieceSprite(shapeName: string, pxPx: number, pyPx: number, rotation: number, size: number): PIXI.Container {
   let shape = shapes[shapeName].get(rotation);
   let center = shapes[shapeName].center;
   let result = new PIXI.Container();
 
   for (let i = 0; i < 4; i++) {
-    let sprite = createBlockSprite(shapeIds[shapeName], 
-    (-center.x + shape[i].x) * size,
-    (3 - (-center.y + shape[i].y)) * size,
-    size);
+    let sprite = createBlockSprite(shapeIds[shapeName],
+      (-center.x + shape[i].x) * size,
+      (3 - (-center.y + shape[i].y)) * size,
+      size);
 
     if (sprite === undefined)
       throw Error();
@@ -355,15 +392,12 @@ class PieceBag {
   }
 }
 
-let nextsBag: PieceBag;
-let genBag: PieceBag;
-
 function pullNextPiece(): string {
   if (nextsBag.count == 0) {
     genBag.generate();
     nextsBag.enqueue(genBag);
   }
-  
+
   let result = nextsBag.dequeue();
   if (result === undefined)
     throw Error;
@@ -385,7 +419,7 @@ function drawNextList() {
   let size = fieldHeight * INFO_PIECE_HEIGHT_SCALE / 3;
   let x = fieldWidth / 2 + INFO_DISTANCE_PX + INFO_PADDING_PX + size * 2;
   let top = -fieldHeight / 2;
-  
+
   for (let i = 0; i < NEXT_COUNT; i++) {
     let shapeName = nexts[i];
     let y = top + i * (size * 3);
@@ -394,6 +428,83 @@ function drawNextList() {
     infoBlocks.addChild(sprite);
   }
 }
+
+function drawHold() {
+  if (holdPiece === undefined) return;
+
+  let size = fieldHeight * INFO_PIECE_HEIGHT_SCALE / 3;
+  let x = -(fieldWidth / 2 + INFO_DISTANCE_PX + INFO_PADDING_PX + size * 2);
+  let y = -fieldHeight / 2;
+
+  let shapeName = holdPiece;
+  let sprite = createPieceSprite(shapeName, x, y, 0, size);
+  infoBlocks.addChild(sprite);
+}
+
+function swapHold() {
+  let tmp = holdPiece;
+  holdPiece = curPiece;
+  if (tmp === undefined)
+    curPiece = pullNextPiece();
+  else
+    curPiece = tmp;
+
+  initPiece();
+}
+
+function initPiece() {
+  curX = PIECE_INITIAL_X;
+  curY = PIECE_INITIAL_Y;
+  curRotation = 0;
+}
+
+function isOverlap(shapeName: string, px: number, py: number, rotation: number): boolean {
+  let shape = shapes[shapeName].get(rotation);
+
+  for (let i = 0; i < 4; i++) {
+    let bx = blockX(px, shape[i].x);
+    let by = blockY(py, shape[i].y);
+    if (bx < 0 || 9 < bx)
+      return true;
+    if (by < 0 || 39 < by)
+      return true;
+    if (blocksData[bx][by] > 0)
+      return true;
+  }
+  return false;
+}
+
+
+
+let moveDir: ("stopping" | "left" | "right") = "stopping";
+let moveSince: (number | undefined) = undefined;
+let lastHarddrop: number = 0;
+
+function moveLeft() {
+  if (!isOverlap(curPiece, curX - 1, curY, curRotation))
+    curX -= 1;
+}
+
+function moveRight() {
+  if (!isOverlap(curPiece, curX + 1, curY, curRotation))
+    curX += 1;
+}
+
+function gameLoop() {
+  let curMoveDir: typeof moveDir;
+
+  if (actionState.value["left"])
+    moveLeft();
+  if (actionState.value["right"])
+    moveRight();
+
+  refreshBlocks();
+}
+
+function drawLoop() {
+
+}
+
 </script>
 
 <template>
@@ -408,4 +519,4 @@ function drawNextList() {
 
   border: solid 3px #cde;
 }
-</style>
+</style>../stores/stores

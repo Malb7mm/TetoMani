@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import SideBar from "./components/SideBar.vue";
+import InputDaemon from "./components/InputDaemon.vue"
 import { RouterLink, RouterView } from 'vue-router'
 </script>
 
@@ -13,6 +14,7 @@ import { RouterLink, RouterView } from 'vue-router'
         </Transition>
       </RouterView>
     </div>
+    <InputDaemon />
   </div>
 </template>
 
