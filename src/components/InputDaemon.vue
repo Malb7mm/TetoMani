@@ -8,8 +8,8 @@ let keyconfs: { [key: string]: Set<string> } = {
   "right": new Set(["KeyD"]),
   "softdrop": new Set(["KeyS"]),
   "harddrop": new Set(["KeyW"]),
-  "rotatecw": new Set(["KeyL"]),
-  "rotateccw": new Set(["KeyK"]),
+  "rotatecw": new Set(["KeyL", "ArrowRight"]),
+  "rotateccw": new Set(["KeyK", "ArrowLeft"]),
   "hold": new Set(["ShiftLeft"]),
 }
 
