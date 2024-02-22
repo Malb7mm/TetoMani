@@ -28,7 +28,7 @@ let fieldHeight: number;
 
 let field: PIXI.Graphics;
 let grid: PIXI.Graphics;
-let blocks: PIXI.Graphics;
+let blocks: PIXI.Container;
 
 let uis: PIXI.Graphics;
 let infoBlocks: PIXI.Container;
@@ -180,7 +180,7 @@ function init() {
 }
 
 function refreshBlocks() {
-  blocks.clear();
+  blocks.removeChildren();
   drawFieldBlocks();
 
   infoBlocks.removeChildren();
@@ -270,6 +270,8 @@ function drawUIField() {
 }
 
 function drawBlock(blockId: number, bx: number, by: number) {
+  if (blockId == 0) return;
+
   let fWidth = fieldWidth;
   let fHeight = fieldHeight;
   let gWidth = fieldWidth / 10;
@@ -280,16 +282,11 @@ function drawBlock(blockId: number, bx: number, by: number) {
   let x = left + gWidth * bx;
   let y = bottom - gWidth * (by + 1);
 
-  if (1 <= blockId && blockId <= 8) {
-    let texId = blockId - 1;
-    blocks.beginTextureFill({ texture: tex[blockTexId[texId]], matrix: blocksMatrix });
-    blocks.drawRect(x, y, gWidth, gWidth);
-  }
-  if (11 <= blockId && blockId <= 18) {
-    let texId = blockId - 11;
-    blocks.beginTextureFill({ texture: tex[blockTexId[texId]], matrix: blocksMatrix, alpha: SHADOW_ALPHA });
-    blocks.drawRect(x, y, gWidth, gWidth);
-  }
+  let sprite = createBlockSprite(blockId, x, y, gWidth);
+  if (sprite === undefined)
+    throw Error;
+
+  blocks.addChild(sprite);
 }
 
 function blockX(px: number, bx: number): number {
@@ -326,13 +323,15 @@ function drawFieldBlocks() {
 function createBlockSprite(blockId: number, bxPx: number, byPx: number, size: number): PIXI.Sprite | undefined {
   let result: PIXI.Sprite;
 
-  if (1 <= blockId && blockId <= 8) {
+  if ((1 <= blockId && blockId <= 8) || (11 <= blockId && blockId <= 18)) {
     let texId = blockId - 1;
+    if (blockId > 10) blockId -= 10;
 
     result = new PIXI.Sprite(tex[blockTexId[texId]]);
     result.position.set(bxPx, byPx);
     result.width = size;
     result.height = size;
+    if (blockId > 10) result.alpha = SHADOW_ALPHA;
     return result;
   }
 
@@ -617,7 +616,16 @@ function swapHold() {
   initPiece();
 }
 
+let fpsMeasureBegin: number = Date.now();
+let fpsCount: number = 0;
+
 function drawLoop() {
+  if (elapsed(fpsMeasureBegin) >= 1000) {
+    debugRef.value["fps"] = fpsCount;
+    fpsCount = 0;
+    fpsMeasureBegin += 1000;
+  }
+  fpsCount++;
   refreshBlocks();
 }
 
