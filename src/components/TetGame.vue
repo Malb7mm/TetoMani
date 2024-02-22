@@ -11,6 +11,22 @@ let container;
 let pixiapp: PIXI.Application<HTMLCanvasElement>;
 let gameLoopInterval: number;
 
+class FpsCounter {
+  fpsMeasureBegin: number = Date.now();
+  fpsCount: number = 0;
+  fpsValue: number = 0;
+
+  get(): number {
+    if (Date.now() - this.fpsMeasureBegin >= 1000) {
+      this.fpsValue = this.fpsCount;
+      this.fpsCount = 0;
+      this.fpsMeasureBegin += 1000;
+    }
+    this.fpsCount++;
+    return this.fpsValue;
+  }
+}
+
 const FIELD_HEIGHT_SCALE = 0.8;
 const NEXT_COUNT = 5;
 const INFO_PIECE_HEIGHT_SCALE = 0.13;
@@ -20,6 +36,9 @@ const PIECE_INITIAL_X = 3;
 const PIECE_INITIAL_Y = 17;
 const PIECE_INITIAL_Y_MAX = 18;
 const SHADOW_ALPHA = 0.25;
+const HARDDROP_COOLDOWN = 100;
+const LOCKDOWN_AVOID_LIMIT = 15;
+const LOCKDOWN_DELAY = 500;
 
 let appHeight: number;
 let appWidth: number;
@@ -468,7 +487,7 @@ function isOverlap(shapeName: string, px: number, py: number, rotation: number):
       return true;
     if (by < 0 || 39 < by)
       return true;
-    if (blocksData[bx][by] > 0)
+    if (blocksData[by][bx] > 0)
       return true;
   }
   return false;
@@ -492,15 +511,106 @@ function nowtime(): number {
   return Date.now();
 }
 
-function elapsed(time: number): number {
+function elapsed(time: number | undefined): number {
+  if (time === undefined)
+    return Number.MAX_VALUE;
   return nowtime() - time;
 }
 
+let gameloop = new FpsCounter();
+
 function gameLoop() {
+  debugRef.value["gameloop"] = gameloop.get();
+  manageGravity();
+  manageHarddrop();
   manageMoveHorizontal();
   manageRotate();
   manageSwapHold();
   debugRef.value["holdact"] = `${actionState.value["hold"]}`;
+}
+
+/**
+ * ピースの4x4範囲のうち、**左下**を指定します
+ */
+function placePiece(shapeName: string, px: number, py: number, rotation: number) {
+  let shape = shapes[shapeName].get(rotation);
+  let shapeId = shapeIds[shapeName];
+
+  for (let i = 0; i < 4; i++) {
+    blocksData[blockY(py, shape[i].y)][blockX(px, shape[i].x)] = shapeId;
+  }
+}
+
+function lockdown() {
+  placePiece(curPiece, curX, curY, curRotation);
+  curPiece = pullNextPiece();
+  initPiece();
+  lastGravityfall = nowtime();
+  lockdownTimerBegin = undefined;
+  lockdownAvoid = 0;
+  reachedHeight = PIECE_INITIAL_Y_MAX;
+  holdActive = true;
+}
+
+let gravity = 800;
+let lastGravityfall: number = nowtime();
+let lockdownTimerBegin: number | undefined = nowtime();
+let lockdownAvoid = 0;
+let reachedHeight = PIECE_INITIAL_Y_MAX;
+
+function manageGravity() {
+  let softdrop = actionState.value["softdrop"];
+  let gravityInterval = gravity;
+  gravityInterval /= (softdrop) ? softDropFactor : 1;
+
+  if (isOverlap(curPiece, curX, curY - 1, curRotation)) {
+    // 接地してる
+    if (lockdownTimerBegin === undefined)
+      lockdownTimerBegin = nowtime();
+    if (elapsed(lockdownTimerBegin) >= LOCKDOWN_DELAY) {
+      lockdown();
+    }
+  } else {
+    // 接地してない
+    lockdownTimerBegin = undefined;
+    if (elapsed(lastGravityfall) >= gravityInterval) {
+      curY -= 1;
+      if (curY < reachedHeight) {
+        reachedHeight = curY;
+        lockdownAvoid = 0;
+      }
+      lastGravityfall = nowtime();
+    }
+  }
+}
+
+function addLockdownAvoid() {
+  if (lockdownTimerBegin === undefined)
+    return;
+  if (lockdownAvoid >= LOCKDOWN_AVOID_LIMIT)
+    return;
+
+  lockdownAvoid++;
+  lockdownTimerBegin = nowtime();
+}
+
+let prevHarddropact: boolean;
+let lastHarddrop: number = nowtime();
+
+function manageHarddrop() {
+  let harddropact = actionState.value["harddrop"];
+
+  if (!prevHarddropact && harddropact && elapsed(lastHarddrop) >= HARDDROP_COOLDOWN) {
+    lastHarddrop = nowtime();
+    harddrop();
+  }
+
+  prevHarddropact = harddropact;
+}
+
+function harddrop() {
+  curY = getGhostY();
+  lockdown();
 }
 
 let keydownSince: { [key: string]: number | undefined; } = {
@@ -539,6 +649,7 @@ function manageMoveHorizontal() {
   if (lastDir != moveDir) {
     lastMoved = "notyet";
     dasSince = nowtime();
+    addLockdownAvoid();
   }
   lastDir = moveDir;
   debugRef.value["moveDir"] = moveDir;
@@ -577,10 +688,14 @@ function manageRotate() {
   let clockwise = actionState.value["rotatecw"];
   let countercw = actionState.value["rotateccw"];
 
-  if (!prevClockwise && clockwise)
+  if (!prevClockwise && clockwise) {
     rotate("cw");
-  else if (!prevCountercw && countercw)
+    addLockdownAvoid();
+  }
+  else if (!prevCountercw && countercw) {
     rotate("ccw");
+    addLockdownAvoid();
+  }
 
   prevClockwise = clockwise;
   prevCountercw = countercw;
@@ -623,16 +738,10 @@ function swapHold() {
   initPiece();
 }
 
-let fpsMeasureBegin: number = Date.now();
-let fpsCount: number = 0;
+let fps = new FpsCounter();
 
 function drawLoop() {
-  if (elapsed(fpsMeasureBegin) >= 1000) {
-    debugRef.value["fps"] = fpsCount;
-    fpsCount = 0;
-    fpsMeasureBegin += 1000;
-  }
-  fpsCount++;
+  debugRef.value["fps"] = fps.get();
   refreshBlocks();
 }
 
@@ -653,6 +762,7 @@ function drawLoop() {
 
   border: solid 3px #cde;
 }
+
 #debugref {
   font-family: 'M PLUS 1';
   font-weight: 400;
