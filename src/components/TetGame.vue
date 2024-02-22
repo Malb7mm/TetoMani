@@ -27,6 +27,10 @@ class FpsCounter {
   }
 }
 
+function sequential(first: number, length: number) {
+  return new Array(length).fill(first).map((x, i) => x + i);
+}
+
 const FIELD_HEIGHT_SCALE = 0.8;
 const NEXT_COUNT = 5;
 const INFO_PIECE_HEIGHT_SCALE = 0.13;
@@ -529,6 +533,26 @@ function gameLoop() {
   debugRef.value["holdact"] = `${actionState.value["hold"]}`;
 }
 
+function isLineFull(ly: number): boolean {
+  for (let x = 0; x < 10; x++) {
+    if (blocksData[ly][x] == 0)
+      return false;
+  }
+  return true;
+}
+
+function clearFullLines(lys: number[]) {
+  let filtered = lys
+    .filter((e) => { return (0 <= e && e <= 39) })
+    .filter((e) => isLineFull(e));
+  for (let ly of filtered.reverse()) {
+    for (let i = ly; i < 39; i++) {
+      blocksData[i] = [...blocksData[i + 1]];
+    }
+    blocksData[39].fill(0);
+  }
+}
+
 /**
  * ピースの4x4範囲のうち、**左下**を指定します
  */
@@ -539,6 +563,7 @@ function placePiece(shapeName: string, px: number, py: number, rotation: number)
   for (let i = 0; i < 4; i++) {
     blocksData[blockY(py, shape[i].y)][blockX(px, shape[i].x)] = shapeId;
   }
+  clearFullLines(sequential(py, 4));
 }
 
 function lockdown() {
