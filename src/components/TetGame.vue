@@ -9,6 +9,7 @@ type xy = { x: number, y: number };
 
 let container;
 let pixiapp: PIXI.Application<HTMLCanvasElement>;
+let gameLoopInterval: number;
 
 const FIELD_HEIGHT_SCALE = 0.8;
 const NEXT_COUNT = 5;
@@ -142,6 +143,7 @@ onUnmounted(() => {
 function destroy() {
   container!.removeChild(pixiapp.view);
   pixiapp.destroy(true, { children: true });
+  clearInterval(gameLoopInterval);
 }
 
 function init() {
@@ -172,7 +174,7 @@ function init() {
   curPiece = pullNextPiece();
   initPiece();
 
-  setInterval(gameLoop, 1)
+  gameLoopInterval = setInterval(gameLoop, 1);
   pixiapp.ticker.add(drawLoop);
 }
 
