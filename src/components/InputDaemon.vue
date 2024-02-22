@@ -52,4 +52,6 @@ document.addEventListener("keyup", (e) => {
     }
   }
 });
-</script>../stores/stores
+</script>
+
+<template></template>

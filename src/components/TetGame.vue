@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import * as PIXI from "pixi.js";
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { useActionStateStore } from '../stores/stores'
 
 const actionState = useActionStateStore();
@@ -19,6 +19,7 @@ const INFO_PADDING_PX = 10;
 const PIECE_INITIAL_X = 3;
 const PIECE_INITIAL_Y = 17;
 const PIECE_INITIAL_Y_MAX = 18;
+const SHADOW_ALPHA = 0.4;
 
 let appHeight: number;
 let appWidth: number;
@@ -236,7 +237,7 @@ function drawGrid() {
 
 function drawUIField() {
   let nfWidth = fieldHeight * INFO_PIECE_HEIGHT_SCALE * (4 / 3) + INFO_PADDING_PX * 2;
-  let nfHeight = fieldHeight * INFO_PIECE_HEIGHT_SCALE * 5 + INFO_PADDING_PX * 2;
+  let nfHeight = fieldHeight * INFO_PIECE_HEIGHT_SCALE * NEXT_COUNT + INFO_PADDING_PX * 2;
 
   let nfLeft = fieldWidth / 2 + INFO_DISTANCE_PX;
   let nfTop = -fieldHeight / 2;
@@ -276,12 +277,17 @@ function drawBlock(blockId: number, bx: number, by: number) {
   let bottom = fHeight / 2;
   let left = -fWidth / 2;
 
+  let x = left + gWidth * bx;
+  let y = bottom - gWidth * (by + 1);
+
   if (1 <= blockId && blockId <= 8) {
     let texId = blockId - 1;
-    let x = left + gWidth * bx;
-    let y = bottom - gWidth * (by + 1);
-
     blocks.beginTextureFill({ texture: tex[blockTexId[texId]], matrix: blocksMatrix });
+    blocks.drawRect(x, y, gWidth, gWidth);
+  }
+  if (11 <= blockId && blockId <= 18) {
+    let texId = blockId - 11;
+    blocks.beginTextureFill({ texture: tex[blockTexId[texId]], matrix: blocksMatrix, alpha: SHADOW_ALPHA });
     blocks.drawRect(x, y, gWidth, gWidth);
   }
 }
@@ -297,11 +303,14 @@ function blockY(py: number, by: number): number {
 /**
  * ピースの4x4範囲のうち、**左下**を指定します
  */
-function drawPiece(shapeName: string, px: number, py: number, rotation: number) {
+function drawPiece(shapeName: string, px: number, py: number, rotation: number, shadow: boolean = false) {
   let shape = shapes[shapeName].get(rotation);
+  let shapeId = shapeIds[shapeName];
+  if (shadow)
+    shapeId += 10;
 
   for (let i = 0; i < 4; i++) {
-    drawBlock(shapeIds[shapeName], blockX(px, shape[i].x), blockY(py, shape[i].y));
+    drawBlock(shapeId, blockX(px, shape[i].x), blockY(py, shape[i].y));
   }
 }
 
@@ -443,17 +452,6 @@ function drawHold() {
   infoBlocks.addChild(sprite);
 }
 
-function swapHold() {
-  let tmp = holdPiece;
-  holdPiece = curPiece;
-  if (tmp === undefined)
-    curPiece = pullNextPiece();
-  else
-    curPiece = tmp;
-
-  initPiece();
-}
-
 function initPiece() {
   curX = PIECE_INITIAL_X;
   curY = PIECE_INITIAL_Y;
@@ -478,39 +476,156 @@ function isOverlap(shapeName: string, px: number, py: number, rotation: number):
 
 
 
-let moveDir: ("stopping" | "left" | "right") = "stopping";
-let moveSince: (number | undefined) = undefined;
-let lastHarddrop: number = 0;
+let debugRef = ref<{ [key: string]: number | string }>({});
 
-function moveLeft() {
-  if (!isOverlap(curPiece, curX - 1, curY, curRotation))
-    curX -= 1;
+let delayedAutoShift = 11;
+let autoRepeatRate = 2;
+let softDropFactor = 20;
+
+function nowtime(): number {
+  return Date.now();
 }
 
-function moveRight() {
-  if (!isOverlap(curPiece, curX + 1, curY, curRotation))
-    curX += 1;
+function elapsed(time: number): number {
+  return nowtime() - time;
 }
 
 function gameLoop() {
-  let curMoveDir: typeof moveDir;
+  manageMoveHorizontal();
+  manageRotate();
+  manageSwapHold();
+  debugRef.value["holdact"] = `${actionState.value["hold"]}`;
+}
 
-  if (actionState.value["left"])
-    moveLeft();
-  if (actionState.value["right"])
-    moveRight();
+let keydownSince: { [key: string]: number | undefined; } = {
+  "left": undefined,
+  "right": undefined
+}
+let dasSince: number;
+let lastMoved: number | "once" | "notyet" = "notyet";
+let lastDir: string | undefined = undefined;
 
-  refreshBlocks();
+function manageMoveHorizontal() {
+  let moveDir: string | undefined = undefined;
+
+  for (let dir of ["left", "right"]) {
+    if (actionState.value[dir] && keydownSince[dir] === undefined)
+      keydownSince[dir] = nowtime();
+    if (!actionState.value[dir] && keydownSince[dir] !== undefined)
+      keydownSince[dir] = undefined;
+  }
+
+  for (let dir of ["left", "right"]) {
+    let counterDir = (dir == "left") ? "right" : "left";
+
+    if (keydownSince[dir] !== undefined &&
+      (keydownSince[counterDir] === undefined || keydownSince[dir]! > keydownSince[counterDir]!)) {
+      moveDir = dir;
+    }
+  }
+
+  if (moveDir === undefined) {
+    lastMoved = "notyet";
+    lastDir = undefined;
+    return;
+  }
+
+  if (lastDir != moveDir) {
+    lastMoved = "notyet";
+    dasSince = nowtime();
+  }
+  lastDir = moveDir;
+  debugRef.value["moveDir"] = moveDir;
+
+  let dasMs = Math.floor(delayedAutoShift * (1000 / 60));
+  let arrMs = Math.floor(autoRepeatRate * (1000 / 60));
+
+  if (lastMoved == "notyet") {
+    moveHorizontal(moveDir);
+    lastMoved = "once";
+  }
+  else if (lastMoved == "once") {
+    if (elapsed(dasSince) >= dasMs) {
+      moveHorizontal(moveDir);
+      lastMoved = nowtime();
+    }
+  }
+  else if (elapsed(lastMoved) >= arrMs) {
+    moveHorizontal(moveDir);
+    lastMoved = nowtime();
+  }
+}
+
+function moveHorizontal(dir: string): boolean {
+  let dirX = (dir == "left") ? -1 : 1
+  let result = !isOverlap(curPiece, curX + dirX, curY, curRotation);
+  if (result)
+    curX += dirX;
+  return result;
+}
+
+let prevClockwise = false;
+let prevCountercw = false;
+
+function manageRotate() {
+  let clockwise = actionState.value["rotatecw"];
+  let countercw = actionState.value["rotateccw"];
+
+  if (!prevClockwise && clockwise)
+    rotate("cw");
+  else if (!prevCountercw && countercw)
+    rotate("ccw");
+
+  prevClockwise = clockwise;
+  prevCountercw = countercw;
+}
+
+function rotate(dir: string): boolean {
+  let dirR = (dir == "cw") ? 1 : -1;
+  let newRotation = (4 + curRotation + dirR) % 4;
+  let result = !isOverlap(curPiece, curX, curY, newRotation);
+  if (result)
+    curRotation = newRotation;
+  return result;
+}
+
+let holdActive = true;
+let prevHoldact = false;
+
+function manageSwapHold() {
+  if (!holdActive)
+    return;
+
+  let holdact = actionState.value["hold"];
+
+  if (!prevHoldact && holdact) {
+    swapHold();
+    holdActive = false;
+  }
+
+  prevHoldact = holdact;
+}
+
+function swapHold() {
+  let tmp = holdPiece;
+  holdPiece = curPiece;
+  if (tmp === undefined)
+    curPiece = pullNextPiece();
+  else
+    curPiece = tmp;
+
+  initPiece();
 }
 
 function drawLoop() {
-
+  refreshBlocks();
 }
 
 </script>
 
 <template>
   <div id="tetgame"></div>
+  debugRef:<br>{{ debugRef }}<br>
 </template>
 
 <style scoped>
@@ -521,4 +636,4 @@ function drawLoop() {
 
   border: solid 3px #cde;
 }
-</style>../stores/stores
+</style>
