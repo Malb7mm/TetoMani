@@ -1,9 +1,21 @@
 <script setup lang="ts">
 import * as PIXI from "pixi.js";
 import { onMounted, onUnmounted, ref } from "vue";
-import { useActionStateStore } from '../stores/stores'
+import { useActionStateStore, useEndlessGameVariablesStore } from '../stores/stores'
+import { Type, plainToClass } from 'class-transformer';
 
-const actionState = useActionStateStore();
+const actionStateStore = useActionStateStore();
+const gameVariablesStore = useEndlessGameVariablesStore();
+
+function nowtime(): number {
+  return Date.now();
+}
+
+function elapsed(time: number | undefined): number {
+  if (time === undefined)
+    return Number.MAX_VALUE;
+  return nowtime() - time;
+}
 
 class XY {
   x: number = 0;
@@ -120,20 +132,25 @@ class PieceBag {
     this.count = 7;
   }
 
+  clear() {
+    this.pieces = [];
+    this.count = 0;
+  }
+
   dequeue(): string | undefined {
-    this.count--;
+      this.count = this.pieces.length;
     return this.pieces.shift();
   }
 
   enqueue(bag: PieceBag): void;
-  enqueue(piece: string): void;
-  enqueue(pieces: PieceBag | string) {
+  enqueue(pieces: string[]): void;
+  enqueue(pieces: PieceBag | string[]) {
     if (pieces instanceof PieceBag) {
-      this.pieces = this.pieces.concat(v.genBag.pieces);
-      this.count += v.genBag.count;
+      this.pieces = this.pieces.concat(pieces.pieces);
+      this.count = this.pieces.length;
     } else {
-      this.pieces.push(pieces);
-      this.count += 1;
+      this.pieces = this.pieces.concat(pieces);
+      this.count = this.pieces.length;
     }
   }
 }
@@ -163,6 +180,8 @@ class KickTable {
 }
 
 class GameVariables {
+  blocksData: number[][] = Array(40).fill(undefined).map(() => Array(10).fill(0));
+
   curX: number = PIECE_INITIAL_X;
   curY: number = PIECE_INITIAL_Y;
   curPiece: string = "I";
@@ -171,7 +190,6 @@ class GameVariables {
   holdPiece: string | undefined = undefined;
 
   nextsBag: PieceBag = new PieceBag();
-  genBag: PieceBag = new PieceBag();
 
   lastGravityfall: number | undefined = undefined;
   lockdownTimerBegin: number | undefined = undefined;
@@ -194,9 +212,27 @@ class GameVariables {
 
   holdActive: boolean = true;
   prevHoldact: boolean = false;
+
+  isGameover: boolean = false;
+
+  json(): string {
+    return JSON.stringify(this);
+  }
+
+  static byJson(json: string): GameVariables {
+    let obj = JSON.parse(json);
+    let result = plainToClass(GameVariables, obj as GameVariables);
+
+    result.nextsBag = new PieceBag();
+    result.nextsBag.clear();
+    result.nextsBag.enqueue(obj.nextsBag.pieces);
+    console.log(result.nextsBag.pieces);
+
+    return result;
+  }
 };
 
-const v = new GameVariables();
+let v = new GameVariables();
 
 let container;
 let pixiapp: PIXI.Application<HTMLCanvasElement>;
@@ -231,8 +267,6 @@ let blocks: PIXI.Container;
 let uis: PIXI.Graphics;
 let infoBlocks: PIXI.Container;
 
-let blocksData: number[][];
-
 let tex: { [key: string]: PIXI.Texture } = {};
 const blockTexId = ["bRed", "bOrange", "bYellow", "bGreen", "bBlue", "bCyan", "bPurple", "bGray"];
 
@@ -257,7 +291,6 @@ onMounted(async () => {
   }
 
   initDraw();
-  initGame();
 });
 
 onUnmounted(() => {
@@ -274,7 +307,6 @@ function initDraw() {
   field = new PIXI.Graphics();
   grid = new PIXI.Graphics();
   blocks = new PIXI.Graphics();
-  blocksData = Array(40).fill(undefined).map(() => Array(10).fill(0));
 
   uis = new PIXI.Graphics();
   infoBlocks = new PIXI.Graphics();
@@ -419,7 +451,7 @@ function drawPiece(shapeName: string, px: number, py: number, rotation: number, 
 function drawFieldBlocks() {
   for (let ix = 0; ix < 10; ix++) {
     for (let iy = 0; iy < 23; iy++) {
-      let blockId = blocksData[iy][ix];
+      let blockId = v.blocksData[iy][ix];
       drawBlock(blockId, ix, iy);
     }
   }
@@ -466,8 +498,9 @@ function createPieceSprite(shapeName: string, pxPx: number, pyPx: number, rotati
 
 function pullNextPiece(): string {
   if (v.nextsBag.count == 0) {
-    v.genBag.generate();
-    v.nextsBag.enqueue(v.genBag);
+    let genBag = new PieceBag();
+    genBag.generate();
+    v.nextsBag.enqueue(genBag);
   }
 
   let result = v.nextsBag.dequeue();
@@ -477,9 +510,10 @@ function pullNextPiece(): string {
 }
 
 function getNextList(): string[] {
-  if (v.nextsBag.count < NEXT_COUNT) {
-    v.genBag.generate();
-    v.nextsBag.enqueue(v.genBag);
+  if (v.nextsBag.count <= NEXT_COUNT) {
+    let genBag = new PieceBag();
+    genBag.generate();
+    v.nextsBag.enqueue(genBag);
   }
 
   return v.nextsBag.pieces.slice(0, NEXT_COUNT);
@@ -517,6 +551,14 @@ function initPiece() {
   v.curX = PIECE_INITIAL_X;
   v.curY = PIECE_INITIAL_Y;
   v.curRotation = 0;
+
+  while (isOverlap(v.curPiece, v.curX, v.curY, v.curRotation)) {
+    v.curY++;
+    if (v.curY > PIECE_INITIAL_Y_MAX) {
+      gameover();
+      break;
+    }
+  }
 }
 
 function isOverlap(shapeName: string, px: number, py: number, rotation: number): boolean {
@@ -529,7 +571,7 @@ function isOverlap(shapeName: string, px: number, py: number, rotation: number):
       return true;
     if (by < 0 || 39 < by)
       return true;
-    if (blocksData[by][bx] > 0)
+    if (v.blocksData[by][bx] > 0)
       return true;
   }
   return false;
@@ -549,35 +591,49 @@ let delayedAutoShift = 11;
 let autoRepeatRate = 2;
 let softDropFactor = 20;
 
-function nowtime(): number {
-  return Date.now();
-}
-
-function elapsed(time: number | undefined): number {
-  if (time === undefined)
-    return Number.MAX_VALUE;
-  return nowtime() - time;
-}
-
 function initGame() {
-  v.nextsBag = new PieceBag();
-  v.genBag = new PieceBag();
+  v = new GameVariables();
   v.curPiece = pullNextPiece();
-  initPiece();
 
-  registerLoop();
+  registerLoops();
+}
+
+function pauseGame() {
+  gameVariablesStore.json = v.json();
+
+  unregisterLoops();
+}
+
+function loadGame() {
+  v = GameVariables.byJson(gameVariablesStore.json);
+  drawLoop();
 }
 
 function resumeGame() {
-  v.genBag = new PieceBag();
+  loadGame();
+  if (v.isGameover) {
+    return;
+  }
 
-  registerLoop();
+  registerLoops();
 }
 
-function registerLoop() {
+function gameover() {
+  v.isGameover = true;
+  pauseGame();
+}
+
+function registerLoops() {
   gameLoopInterval = setInterval(gameLoop, 1);
   pixiapp.ticker.add(drawLoop);
 }
+
+function unregisterLoops() {
+  clearInterval(gameLoopInterval);
+  pixiapp.ticker.remove(drawLoop);
+}
+
+
 
 let gameloopFps = new FpsCounter();
 
@@ -588,12 +644,12 @@ function gameLoop() {
   manageMoveHorizontal();
   manageRotate();
   manageSwapHold();
-  debugRef.value["holdact"] = `${actionState.value["hold"]}`;
+  debugRef.value["holdact"] = `${actionStateStore.value["hold"]}`;
 }
 
 function isLineFull(ly: number): boolean {
   for (let x = 0; x < 10; x++) {
-    if (blocksData[ly][x] == 0)
+    if (v.blocksData[ly][x] == 0)
       return false;
   }
   return true;
@@ -605,9 +661,9 @@ function clearFullLines(lys: number[]) {
     .filter((e) => isLineFull(e));
   for (let ly of filtered.reverse()) {
     for (let i = ly; i < 39; i++) {
-      blocksData[i] = [...blocksData[i + 1]];
+      v.blocksData[i] = [...v.blocksData[i + 1]];
     }
-    blocksData[39].fill(0);
+    v.blocksData[39].fill(0);
   }
 }
 
@@ -619,7 +675,7 @@ function placePiece(shapeName: string, px: number, py: number, rotation: number)
   let shapeId = shapeIds[shapeName];
 
   for (let i = 0; i < 4; i++) {
-    blocksData[blockY(py, shape[i].y)][blockX(px, shape[i].x)] = shapeId;
+    v.blocksData[blockY(py, shape[i].y)][blockX(px, shape[i].x)] = shapeId;
   }
   clearFullLines(sequential(py, 4));
 }
@@ -638,7 +694,7 @@ function lockdown() {
 let gravity = 800;
 
 function manageGravity() {
-  let softdrop = actionState.value["softdrop"];
+  let softdrop = actionStateStore.value["softdrop"];
   let gravityInterval = gravity;
   gravityInterval /= (softdrop) ? softDropFactor : 1;
 
@@ -674,7 +730,7 @@ function addLockdownAvoid() {
 }
 
 function manageHarddrop() {
-  let harddropact = actionState.value["harddrop"];
+  let harddropact = actionStateStore.value["harddrop"];
 
   if (!v.prevHarddropact && harddropact && elapsed(v.lastHarddrop) >= HARDDROP_COOLDOWN) {
     v.lastHarddrop = nowtime();
@@ -694,9 +750,9 @@ function manageMoveHorizontal() {
   let result = false;
 
   for (let dir of ["left", "right"]) {
-    if (actionState.value[dir] && v.keydownSince[dir] === undefined)
+    if (actionStateStore.value[dir] && v.keydownSince[dir] === undefined)
       v.keydownSince[dir] = nowtime();
-    if (!actionState.value[dir] && v.keydownSince[dir] !== undefined)
+    if (!actionStateStore.value[dir] && v.keydownSince[dir] !== undefined)
       v.keydownSince[dir] = undefined;
   }
 
@@ -788,8 +844,8 @@ srsTable.S = srsTable.T;
 srsTable.Z = srsTable.T;
 
 function manageRotate() {
-  let clockwise = actionState.value["rotatecw"];
-  let countercw = actionState.value["rotateccw"];
+  let clockwise = actionStateStore.value["rotatecw"];
+  let countercw = actionStateStore.value["rotateccw"];
   let result = false;
 
   if (!v.prevClockwise && clockwise) {
@@ -825,7 +881,7 @@ function manageSwapHold() {
   if (!v.holdActive)
     return;
 
-  let holdact = actionState.value["hold"];
+  let holdact = actionStateStore.value["hold"];
 
   if (!v.prevHoldact && holdact) {
     swapHold();
@@ -859,6 +915,11 @@ function drawLoop() {
   <div id="tetgame"></div>
   <div id="debugref">
     [Debug Information]<br>{{ debugRef }}<br>
+    [Controls]<br>
+    <button v-on:click="initGame()">start</button>
+    <button v-on:click="pauseGame()">pause</button>
+    <button v-on:click="loadGame()">load</button>
+    <button v-on:click="resumeGame()">resume</button>
   </div>
 </template>
 

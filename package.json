@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@pixi-essentials/gradients": "^1.0.1",
+    "class-transformer": "^0.5.1",
     "pinia": "^2.1.7",
     "pixi.js": "^7.4.0",
+    "reflect-metadata": "^0.2.1",
     "vue": "^3.4.15",
     "vue-router": "^4.2.5",
     "vue3-pixi": "^0.9.1"
