@@ -2,7 +2,7 @@
 import * as PIXI from "pixi.js";
 import { onMounted, onUnmounted, ref } from "vue";
 import { useActionStateStore, useEndlessGameVariablesStore } from '../stores/stores'
-import { Type, plainToClass } from 'class-transformer';
+import { plainToClass } from 'class-transformer';
 
 const actionStateStore = useActionStateStore();
 const gameVariablesStore = useEndlessGameVariablesStore();
@@ -226,7 +226,6 @@ class GameVariables {
     result.nextsBag = new PieceBag();
     result.nextsBag.clear();
     result.nextsBag.enqueue(obj.nextsBag.pieces);
-    console.log(result.nextsBag.pieces);
 
     return result;
   }
@@ -270,6 +269,8 @@ let infoBlocks: PIXI.Container;
 let tex: { [key: string]: PIXI.Texture } = {};
 const blockTexId = ["bRed", "bOrange", "bYellow", "bGreen", "bBlue", "bCyan", "bPurple", "bGray"];
 
+
+
 onMounted(async () => {
   container = document.getElementById("tetgame");
   pixiapp = new PIXI.Application<HTMLCanvasElement>({
@@ -291,6 +292,10 @@ onMounted(async () => {
   }
 
   initDraw();
+  emit("load");
+
+  if (gameVariablesStore.gameState == "playing")
+    loadGame();
 });
 
 onUnmounted(() => {
@@ -298,6 +303,9 @@ onUnmounted(() => {
 });
 
 function destroy() {
+  if (gameVariablesStore.gameState == "playing")
+    pauseGame();
+
   container!.removeChild(pixiapp.view);
   pixiapp.destroy(true, { children: true });
   clearInterval(gameLoopInterval);
@@ -594,6 +602,7 @@ let softDropFactor = 20;
 function initGame() {
   v = new GameVariables();
   v.curPiece = pullNextPiece();
+  gameVariablesStore.gameState = "playing";
 
   registerLoops();
 }
@@ -620,6 +629,9 @@ function resumeGame() {
 
 function gameover() {
   v.isGameover = true;
+  gameVariablesStore.gameState = "gameover";
+  emit("gameover");
+
   pauseGame();
 }
 
@@ -909,6 +921,17 @@ function drawLoop() {
   refreshBlocks();
 }
 
+defineExpose({
+  initGame,
+  loadGame,
+  pauseGame,
+  resumeGame,
+});
+
+const emit = defineEmits([
+  "load",
+  "gameover"
+]);
 </script>
 
 <template>

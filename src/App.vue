@@ -20,12 +20,21 @@ import { RouterLink, RouterView } from 'vue-router'
 
 <style scoped>
 .router-enter-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.3s ease;
 }
 
-.router-enter-from,
 .router-leave-from {
   opacity: 0;
+}
+
+.router-enter-from {
+  opacity: 0;
+  transform: translateY(0.5%);
+}
+
+.router-enter-to {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .outer {

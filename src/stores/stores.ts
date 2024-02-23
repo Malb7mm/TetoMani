@@ -8,5 +8,6 @@ export const useActionStateStore = defineStore("actionState", () => {
 
 export const useEndlessGameVariablesStore = defineStore("endlessGameVariables", () => {
   const json = ref("");
-  return { json }
+  const gameState: Ref<"standby" | "playing" | "gameover"> = ref("standby");
+  return { json, gameState }
 });
