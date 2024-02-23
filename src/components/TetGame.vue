@@ -288,7 +288,7 @@ onMounted(async () => {
 
   const blockTexSrc = ["red", "orange", "yellow", "green", "blue", "cyan", "purple", "gray"];
   for (let i = 0; i <= 7; i++) {
-    tex[blockTexId[i]] = await PIXI.Assets.load(`/img/game/${blockTexSrc[i]}.png`);
+    tex[blockTexId[i]] = await PIXI.Assets.load(`${import.meta.env.BASE_URL}/img/game/${blockTexSrc[i]}.png`);
   }
 
   initDraw();
@@ -936,7 +936,7 @@ const emit = defineEmits([
 
 <template>
   <div id="tetgame"></div>
-  <div id="debugref">
+  <div id="debugref" v-if="false">
     [Debug Information]<br>{{ debugRef }}<br>
     [Controls]<br>
     <button v-on:click="initGame()">start</button>

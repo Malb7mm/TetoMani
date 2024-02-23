@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import { authorize } from './guard';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -7,22 +7,32 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: HomeView
+      component: () => import('../views/HomeView.vue'),
+      beforeEnter: authorize,
     },
     {
       path: '/config',
       name: 'config',
-      component: () => import('../views/ConfigView.vue')
+      component: () => import('../views/ConfigView.vue'),
+      beforeEnter: authorize,
     },
     {
       path: '/play/szlj',
       name: 'play-szlj',
-      component: () => import('../views/SZLJQuizView.vue')
+      component: () => import('../views/SZLJQuizView.vue'),
+      beforeEnter: authorize,
     },
     {
       path: '/play/endless',
       name: 'play-endless',
-      component: () => import('../views/TetEndlessView.vue')
+      component: () => import('../views/TetEndlessView.vue'),
+      beforeEnter: authorize,
+    },
+    {
+      path: '/:catchAll(.*)',
+      name: 'notfound',
+      component: () => import('../views/NotFoundView.vue'),
+      beforeEnter: authorize,
     }
   ]
 })
