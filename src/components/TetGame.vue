@@ -179,6 +179,41 @@ class KickTable {
   }
 }
 
+const srsTable: { [key: string]: KickTable } = {}
+
+srsTable.I = new KickTable(
+  [
+    [new XY(0, 0), new XY(-2, 0), new XY(1, 0), new XY(-2, -1), new XY(1, 2)],
+    [new XY(0, 0), new XY(-1, 0), new XY(2, 0), new XY(-1, 2), new XY(2, -1)],
+    [new XY(0, 0), new XY(2, 0), new XY(-1, 0), new XY(2, 1), new XY(-1, -2)],
+    [new XY(0, 0), new XY(1, 0), new XY(-2, 0), new XY(1, -2), new XY(-2, 1)],
+  ],
+  [
+    [new XY(0, 0), new XY(-1, 0), new XY(2, 0), new XY(-1, 2), new XY(2, -1)],
+    [new XY(0, 0), new XY(2, 0), new XY(-1, 0), new XY(2, 1), new XY(-1, -2)],
+    [new XY(0, 0), new XY(1, 0), new XY(-2, 0), new XY(1, -2), new XY(-2, 1)],
+    [new XY(0, 0), new XY(-2, 0), new XY(1, 0), new XY(-2, -1), new XY(1, 2)],
+  ],
+);
+srsTable.T = new KickTable(
+  [
+    [new XY(0, 0), new XY(-1, 0), new XY(-1, 1), new XY(0, -2), new XY(-1, -2)],
+    [new XY(0, 0), new XY(1, 0), new XY(1, -1), new XY(0, 2), new XY(1, 2)],
+    [new XY(0, 0), new XY(1, 0), new XY(1, 1), new XY(0, -2), new XY(1, -2)],
+    [new XY(0, 0), new XY(-1, 0), new XY(-1, -1), new XY(0, 2), new XY(-1, 2)],
+  ],
+  [
+    [new XY(0, 0), new XY(1, 0), new XY(1, 1), new XY(0, -2), new XY(1, -2)],
+    [new XY(0, 0), new XY(1, 0), new XY(1, -1), new XY(0, 2), new XY(1, 2)],
+    [new XY(0, 0), new XY(-1, 0), new XY(-1, 1), new XY(0, -2), new XY(-1, -2)],
+    [new XY(0, 0), new XY(-1, 0), new XY(-1, -1), new XY(0, 2), new XY(-1, 2)],
+  ],
+);
+srsTable.L = srsTable.T;
+srsTable.J = srsTable.T;
+srsTable.S = srsTable.T;
+srsTable.Z = srsTable.T;
+
 class GameVariables {
   blocksData: number[][] = Array(40).fill(undefined).map(() => Array(10).fill(0));
 
@@ -819,41 +854,6 @@ function moveHorizontal(dir: string): boolean {
     v.curX += dirX;
   return result;
 }
-
-const srsTable: { [key: string]: KickTable } = {}
-
-srsTable.I = new KickTable(
-  [
-    [new XY(0, 0), new XY(-2, 0), new XY(1, 0), new XY(-2, -1), new XY(1, 2)],
-    [new XY(0, 0), new XY(-1, 0), new XY(2, 0), new XY(-1, 2), new XY(2, -1)],
-    [new XY(0, 0), new XY(2, 0), new XY(-1, 0), new XY(2, 1), new XY(-1, -2)],
-    [new XY(0, 0), new XY(1, 0), new XY(-2, 0), new XY(1, -2), new XY(-2, 1)],
-  ],
-  [
-    [new XY(0, 0), new XY(-1, 0), new XY(2, 0), new XY(-1, 2), new XY(2, -1)],
-    [new XY(0, 0), new XY(2, 0), new XY(-1, 0), new XY(2, 1), new XY(-1, -2)],
-    [new XY(0, 0), new XY(1, 0), new XY(-2, 0), new XY(1, -2), new XY(-2, 1)],
-    [new XY(0, 0), new XY(-2, 0), new XY(1, 0), new XY(-2, -1), new XY(1, 2)],
-  ],
-);
-srsTable.T = new KickTable(
-  [
-    [new XY(0, 0), new XY(-1, 0), new XY(-1, 1), new XY(0, -2), new XY(-1, -2)],
-    [new XY(0, 0), new XY(1, 0), new XY(1, -1), new XY(0, 2), new XY(1, 2)],
-    [new XY(0, 0), new XY(1, 0), new XY(1, 1), new XY(0, -2), new XY(1, -2)],
-    [new XY(0, 0), new XY(-1, 0), new XY(-1, -1), new XY(0, 2), new XY(-1, 2)],
-  ],
-  [
-    [new XY(0, 0), new XY(1, 0), new XY(1, 1), new XY(0, -2), new XY(1, -2)],
-    [new XY(0, 0), new XY(1, 0), new XY(1, -1), new XY(0, 2), new XY(1, 2)],
-    [new XY(0, 0), new XY(-1, 0), new XY(-1, 1), new XY(0, -2), new XY(-1, -2)],
-    [new XY(0, 0), new XY(-1, 0), new XY(-1, -1), new XY(0, 2), new XY(-1, 2)],
-  ],
-);
-srsTable.L = srsTable.T;
-srsTable.J = srsTable.T;
-srsTable.S = srsTable.T;
-srsTable.Z = srsTable.T;
 
 function manageRotate() {
   let clockwise = actionStateStore.value["rotatecw"];
