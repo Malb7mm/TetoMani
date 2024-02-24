@@ -4,7 +4,7 @@ import { RouterLink, RouterView } from 'vue-router'
 
 <template>
   <div class="sidebar">
-    <div class="title-text">TetoMani<span style="font-size: 14px"> v0.1</span></div>
+    <div class="title-text">TetoMani<span style="font-size: 9px"> 0.1</span></div>
     <div class="dot"></div>
 
     <nav class="nav-top">
