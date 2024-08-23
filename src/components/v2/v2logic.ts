@@ -61,4 +61,41 @@ class Shape {
   }
 }
 
-export {Shape};
+type BagSet = string[];
+
+class PieceBag {
+  pieces: string[];
+  bagSet: BagSet;
+
+  constructor(bagSet: string[]) {
+    this.pieces = [];
+    this.bagSet = bagSet;
+    this.restock();
+  }
+
+  pickNext(): string {
+    if (this.pieces.length === 0)
+      this.restock();
+    return this.pieces.shift()!;
+  }
+
+  getNexts(count: number): string[] {
+    while (this.pieces.length < count)
+      this.restock();
+    return this.pieces.slice(0, count);
+  }
+
+  private restock() {
+    let newBag = [...this.bagSet];
+    for (let i = newBag.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = newBag[i];
+      newBag[i] = newBag[j];
+      newBag[j] = tmp;
+    }
+    this.pieces = this.pieces.concat(newBag);
+  }
+}
+
+export {Shape, PieceBag};
+export type {BagSet};
