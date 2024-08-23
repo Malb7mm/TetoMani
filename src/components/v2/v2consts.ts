@@ -1,7 +1,62 @@
-import {Shape} from "./v2logic";
+import {Shape, KickTable, KickTableSet} from "./v2logic";
 
-class ShapeConsts {
-  static readonly STD: { [key: string]: Shape } = {
+class KickTableSets {
+  static readonly srsPlus_Gen = new KickTable({
+    "cw": [
+      [0,0,-2,0,1,0,-2,-1,1,2],
+      [0,0,-1,0,2,0,-1,2,2,-1],
+      [0,0,2,0,-1,0,2,1,-1,-2],
+      [0,0,1,0,-2,0,1,-2,-2,1],
+    ],
+    "ccw": [
+      [0,0,-1,0,2,0,-1,2,2,-1],
+      [0,0,2,0,-1,0,2,1,-1,-2],
+      [0,0,1,0,-2,0,1,-2,-2,1],
+      [0,0,-2,0,1,0,-2,-1,1,2],
+    ],
+    "180": [
+      [0,0,0,1,1,1,-1,1,1,0,-1,0],
+      [0,0,0,-1,-1,-1,1,-1,-1,0,1,0],
+      [0,0,1,0,1,2,1,1,0,2,0,1],
+      [0,0,-1,0,-1,2,-1,1,0,2,0,1],
+    ],
+  });
+  static readonly srsPlus_I = new KickTable({
+    "cw": [
+      [0,0,1,0,-2,0,-2,-1,1,2],
+      [0,0,-1,0,2,0,-1,2,2,-1],
+      [0,0,2,0,-1,0,2,1,-1,-2],
+      [0,0,1,0,-2,0,1,-2,-2,1],
+    ],
+    "ccw": [
+      [0,0,-1,0,2,0,2,-1,-1,2],
+      [0,0,1,0,-2,0,1,2,-2,-1],
+      [0,0,-2,0,1,0,-2,1,1,-2],
+      [0,0,-1,0,2,0,-1,-2,2,1],
+    ],
+    "180": [
+      [0,0,0,-1],
+      [0,0,-1,0],
+      [0,0,0,1],
+      [0,0,1,0],
+    ],
+  });
+  static readonly srsPlusSet = new KickTableSet({
+    "Gen": this.srsPlus_Gen,
+    "I": this.srsPlus_I,
+  }, {
+    "I": "I",
+    "O": "Gen",
+    "T": "Gen",
+    "L": "Gen",
+    "J": "Gen",
+    "S": "Gen",
+    "Z": "Gen",
+  })
+}
+
+class ShapeSets {
+  static readonly shapes: { [key: string]: Shape } = {
     I: new Shape([[0, 2], [1, 2], [2, 2], [3, 2]], 4),
     O: new Shape([[1, 1], [1, 2], [2, 1], [2, 2]], 4),
     T: new Shape([[1, 2], [0, 1], [1, 1], [2, 1]], 3),
@@ -10,10 +65,12 @@ class ShapeConsts {
     S: new Shape([[1, 2], [2, 2], [0, 1], [1, 1]], 3),
     Z: new Shape([[0, 2], [1, 2], [1, 1], [2, 1]], 3),
   }
+
+  static readonly standard = ["I", "O", "T", "L", "J", "S", "Z"];
 }
 
 class bagSets {
-  static readonly BAG7: string[] = ["I", "O", "T", "L", "J", "S", "Z"];
+  static readonly bag7 = ["I", "O", "T", "L", "J", "S", "Z"];
 }
 
-export {ShapeConsts, bagSets}
+export {ShapeSets, bagSets}

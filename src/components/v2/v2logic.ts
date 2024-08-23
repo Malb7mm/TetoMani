@@ -1,3 +1,7 @@
+type BagSet = string[];
+type RotationType = "cw" | "ccw" | "180";
+type Direction = 0 | 1 | 2 | 3;
+
 /**
  * Yは0が下！
  */
@@ -9,13 +13,10 @@ class XY {
     this.x = x;
     this.y = y;
   }
-}
 
-enum Direction {
-  FRONT = 0,
-  CROCKWISE,
-  UPSIDE_DOWN,
-  COUNTER_CROCKWISE,
+  add(xy: XY): XY {
+    return new XY(this.x + xy.x, this.y + xy.y);
+  }
 }
 
 class Shape {
@@ -40,7 +41,7 @@ class Shape {
     }
   }
 
-  get(rotation: number): XY[] {
+  get(rotation: Direction): XY[] {
     return this.shapes[rotation];
   }
 
@@ -60,8 +61,6 @@ class Shape {
     return new XY(x, y);
   }
 }
-
-type BagSet = string[];
 
 class PieceBag {
   pieces: string[];
@@ -97,5 +96,65 @@ class PieceBag {
   }
 }
 
-export {Shape, PieceBag};
+class KickTableSet {
+  tables: { [key: string]: KickTable };
+  shapeMap: { [key: string]: string };
+
+  constructor(tables: { [key: string]: KickTable }, shapeMap: { [key: string]: string } ) {
+    this.tables = tables;
+    this.shapeMap = shapeMap;
+  }
+
+  getResult(shape: string, xy: XY, direction: Direction, rotation: RotationType, collider: (shape: string, xy: XY, direction: Direction) => boolean): {xy: XY, kickNumber: number} | undefined {
+    return this.tables[this.shapeMap[shape]].getResult(shape, xy, direction, rotation, collider);
+  }
+}
+
+class KickTable {
+  static InnerTable = class {
+    table: XY[][] = Array(4);
+
+    constructor(values: number[][]) {
+      for (let i = 0; i < 4; i++) {
+        this.table[i] = Array(Math.floor(values[i].length / 2));
+  
+        for (let j = 0; j + 1 < values[i].length; j++) {
+          this.table[i][j] = new XY(values[i][j], values[i][j + 1]);
+        }
+      }
+    };
+  }
+
+  tables: { [key in RotationType]: InstanceType<typeof KickTable.InnerTable> } 
+
+  constructor(args: { [key in RotationType]: [number[], number[], number[], number[]] }) {
+    this.tables = {
+      cw: new KickTable.InnerTable(args["cw"]),
+      ccw: new KickTable.InnerTable(args["ccw"]),
+      180: new KickTable.InnerTable(args["180"]),
+    };
+  }
+
+  getResult(shape: string, xy: XY, direction: Direction, rotation: RotationType, collider: (shape: string, xy: XY, direction: Direction) => boolean): {xy: XY, kickNumber: number} | undefined {
+    let table = this.tables[rotation].table[direction];
+    let newDirection = this.getNewDirection(direction, rotation);
+    for (let i = 0; i < table.length; i++) {
+      if (collider(shape, xy.add(table[i]), newDirection))
+        continue;
+      return {xy: xy.add(table[i]), kickNumber: i};
+    }
+    return undefined;
+  }
+
+  private getNewDirection(direction: Direction, rotation: RotationType): Direction {
+    const addends = {"cw": 1, "180": 2, "ccw": 3};
+    let newDirection = (direction + addends[rotation]) % 4;
+    if (newDirection === 3) return 3;
+    if (newDirection === 2) return 2;
+    if (newDirection === 1) return 1;
+    return 0;
+  }
+}
+
+export {Shape, PieceBag, KickTable, KickTableSet};
 export type {BagSet};
