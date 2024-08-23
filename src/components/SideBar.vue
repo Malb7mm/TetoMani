@@ -16,6 +16,7 @@ import { RouterLink, RouterView } from 'vue-router'
 
     <nav class="nav-mode">
       <RouterLink to="/play/endless">エンドレス</RouterLink>
+      <RouterLink to="/play/endless-v2">エンドレス(V2)</RouterLink>
       <RouterLink to="/play/szlj">SZ・LJクイズ</RouterLink>
     </nav>
   </div>

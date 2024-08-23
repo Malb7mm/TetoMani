@@ -29,6 +29,12 @@ const router = createRouter({
       beforeEnter: authorize,
     },
     {
+      path: '/play/endless-v2',
+      name: 'play-endless-v2',
+      component: () => import('../views/TetEndlessV2View.vue'),
+      beforeEnter: authorize,
+    },
+    {
       path: '/:catchAll(.*)',
       name: 'notfound',
       component: () => import('../views/NotFoundView.vue'),
