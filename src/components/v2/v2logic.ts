@@ -28,15 +28,15 @@ class Shape {
       width = Math.max(...shapeCoords.flat());
     this.shapes = Array(width).fill(Array(width));
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < shapeCoords.length; i++) {
       let x = shapeCoords[i][0];
       let y = shapeCoords[i][1];
       let maxIndex = width - 1;
       
       this.shapes[0][i] = new XY(x, y);
-      for (let j = 1; j < 4; j++) {
+      for (let direction = 1; direction < 4; direction++) {
         // 右回りに格納
-        this.shapes[j][i] = new XY(maxIndex - y, x);
+        this.shapes[direction][i] = new XY(maxIndex - y, x);
       }
     }
   }
