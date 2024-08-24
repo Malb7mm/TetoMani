@@ -156,5 +156,9 @@ class KickTable {
   }
 }
 
+class Field {
+  
+}
+
 export {Shape, PieceBag, KickTable, KickTableSet};
 export type {BagSet};

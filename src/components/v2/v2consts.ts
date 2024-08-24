@@ -65,12 +65,18 @@ class ShapeSets {
     S: new Shape([[1, 2], [2, 2], [0, 1], [1, 1]], 3),
     Z: new Shape([[0, 2], [1, 2], [1, 1], [2, 1]], 3),
   }
+}
+
+class BlockSets {
+  static readonly empty = ".";
+  static readonly neutral = "#";
 
   static readonly standard = ["I", "O", "T", "L", "J", "S", "Z"];
 }
 
-class bagSets {
+class BagSets {
   static readonly bag7 = ["I", "O", "T", "L", "J", "S", "Z"];
+  static readonly bag14 = this.bag7.concat(this.bag7);
 }
 
-export {ShapeSets, bagSets}
+export {ShapeSets, BagSets, BlockSets, KickTableSets}
