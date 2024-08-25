@@ -1,6 +1,6 @@
 /// <reference lib="es2021" />
 
-type BagSet = string[];
+type BlockSet = string[];
 type RotationType = "cw" | "ccw" | "180";
 type Direction = 0 | 1 | 2 | 3;
 
@@ -67,10 +67,11 @@ class Shape {
 type BagElementType = "single" | "grouped" | "random-grouped";
 
 class PieceBagElement {
-  value: PieceBagElement[] | string;
+  consumedCount: number = 0;
   elementType: BagElementType;
   doMidwayTerminate: boolean;
   terminate: number;
+  value: PieceBagElement[] | string;
   queue: string[] = [];
 
   constructor(elementType: "single", value: string);
@@ -79,7 +80,7 @@ class PieceBagElement {
   constructor(elementType: BagElementType, arg2?: any) {
     this.elementType = elementType;
     this.value = (typeof arg2 === "string") ? arg2 : [];
-    this.terminate = (typeof arg2 === "number") ? arg2 : 0;
+    this.terminate = (typeof arg2 === "number") ? arg2 : (elementType === "single") ? 1 : 0;
     this.doMidwayTerminate = typeof arg2 === "number";
   }
 
@@ -105,7 +106,35 @@ class PieceBagElement {
     if (this.value instanceof Array)
       for (let e of elements)
         this.value.push(e);
-      this.terminate
+      if (!this.doMidwayTerminate)
+        this.terminate = this.value.length;
+  }
+
+  getValuesSorted(): string[] {
+    let queue = this.queue.slice();
+
+    queue.sort(PieceBagElement.blockComparer);
+    return queue;
+  }
+
+  static blockComparer(a: string, b: string): number {
+    let result = 0;
+    let tetrominos = ["I", "O", "T", "L", "J", "S", "Z"];
+    for (let i = 0; i < tetrominos.length; i++) {
+      for (let j = i + 1; j < tetrominos.length; j++) {
+        result = beMinusIfMatched(tetrominos[i], tetrominos[j]) ?? result;
+      }
+    }
+    if (result != 0) return result;
+    return a.localeCompare(b);
+    
+    function beMinusIfMatched(former: string, latter: string): number | undefined {
+      if (a === former && b === latter)
+        return -1;
+      if (b === former && a === latter)
+        return 1;
+      return undefined;
+    }
   }
 
   generateQueue(): string[] {
@@ -140,6 +169,30 @@ class PieceBagElement {
     this.queue = this.queue.concat(additionalQueue);
     return additionalQueue;
   }
+
+  isAllConsumed(): boolean {
+    return this.consumedCount === this.terminate;
+  }
+
+  pick(): string | undefined {
+    if (this.isAllConsumed())
+      return;
+    
+    if (this.value instanceof Array) {
+      if (!this.value[this.consumedCount].isAllConsumed()) {
+        this.value[this.consumedCount].pick();
+        if (this.value[this.consumedCount].isAllConsumed())
+          this.consumedCount ++;
+      }
+      else
+        this.consumedCount++;
+    }
+    else { // this.elementType === "single"
+      this.consumedCount = 1;
+    }
+
+    return this.queue.shift();
+  }
 }
 
 class PieceBagBracket {
@@ -162,11 +215,8 @@ class PieceBagBracket {
 class PieceBag {
   elementRoot: PieceBagElement;
   doLoopLastElement: boolean = false;
-  nextCount: number;
-  
-  constructor(bagPattern: string, bagSet: BagSet, nextCount: number) {
-    this.nextCount = nextCount;
 
+  constructor(bagPattern: string, blockSet: BlockSet) {
     bagPattern = bagPattern.replaceAll("@", "IOTLJSZ");
     let stack: PieceBagBracket[] = [
       new PieceBagBracket("head", 0),
@@ -200,7 +250,7 @@ class PieceBag {
         stack.shift();
       }
       else {
-        if (bagSet.includes(c))
+        if (blockSet.includes(c))
           stack[0].elements.push(new PieceBagElement("single", c));
       }
     }
@@ -218,7 +268,6 @@ class PieceBag {
 
     function getRepeatCount(beginIndex: number): {count: number, skipIndex: number} {
       let s = bagPattern.slice(beginIndex + 1);
-      console.log(s);
       let match = s.match(/^\d+/);
       if (match) 
         return {count: parseInt(match[0]) - 1, skipIndex: match[0].length};
@@ -226,15 +275,37 @@ class PieceBag {
     }
   }
 
-  pickNext() {
-
+  pickNext(): string | undefined {
+    if (this.elementRoot.isAllConsumed())
+      if (this.doLoopLastElement)
+        this.elementRoot.addQueueFromLastElement();
+      else
+        return undefined;
+    return this.elementRoot.pick();
   }
 
-  getNexts() {
-
+  getNexts(count: number): string[] {
+    if (this.doLoopLastElement)
+      while (this.elementRoot.queue.length < count)
+        this.elementRoot.addQueueFromLastElement();
+    return this.elementRoot.queue.slice(0, count);
   }
 
+  getVirtualNexts(bagCount: number): String[][] {
+    if (!(this.elementRoot.value instanceof Array))
+      throw new Error("for compiler");
+    let result: String[][] = [];
+    let cnt = 0;
+    for (let element of this.elementRoot.value) {
+      if (element.isAllConsumed()) continue;
+      let virtualNexts = element.getValuesSorted();
+      result.push(virtualNexts);
 
+      cnt++;
+      if (cnt == bagCount) break;
+    }
+    return result;
+  }
 }
 
 class KickTableSet {
@@ -298,8 +369,8 @@ class KickTable {
 }
 
 class Field {
-
+  
 }
 
 export {Shape, PieceBag, KickTable, KickTableSet};
-export type {BagSet};
+export type {BlockSet as BagSet};

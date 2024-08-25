@@ -1,8 +1,33 @@
 <script setup lang="ts">
+import { PieceBag } from './v2/v2logic';
+import { BagSets } from './v2/v2consts';
+
+let piecebag: PieceBag;
+piecebag = new PieceBag("[@:6][@]*2", BagSets.bag7);
+piecebag.elementRoot.generateQueue();
+console.log(piecebag);
+
+function showBag() {
+  console.log(piecebag);
+}
+function pickNext() {
+  console.log(piecebag.pickNext());
+}
+function getNexts() {
+  console.log(piecebag.getNexts(5));
+}
+function getVirtualNexts() {
+  console.log(piecebag.getVirtualNexts(2));
+}
 </script>
 
 <template>
-  <div id="tetgame"></div>
+  <div id="tetgame">
+    <div @click="showBag()">バッグ出力</div>
+    <div @click="pickNext()">ピック</div>
+    <div @click="getNexts()">ネクスト</div>
+    <div @click="getVirtualNexts()">仮想ネクスト</div>
+  </div>
   <div id="debugref" v-if="false">
   </div>
 </template>
