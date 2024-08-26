@@ -1,6 +1,9 @@
 /// <reference lib="es2021" />
+import { Blocks, ShapeSets, KickTableSets } from "./v2consts";
+import { GameSettings } from "./v2settings";
 
 type BlockSet = string[];
+type ShapeDict = { [key: string]: Shape };
 type RotationType = "cw" | "ccw" | "180";
 type Direction = 0 | 1 | 2 | 3;
 
@@ -16,16 +19,24 @@ class XY {
     this.y = y;
   }
 
-  add(xy: XY): XY {
-    return new XY(this.x + xy.x, this.y + xy.y);
+  add(xy: XY): XY;
+  add(x: number, y: number): XY;
+  add(arg1: any, arg2?: any): XY {
+    if (arg1 instanceof XY)
+      return new XY(this.x + arg1.x, this.y + arg1.y);
+    else
+      return new XY(this.x + arg1, this.y + arg2);
   }
 }
 
 class Shape {
   // XY[向き][i番目のブロック]の座標
+  name: string;
   shapes: XY[][]
 
-  constructor(shapeCoords: number[][], width: number | undefined = undefined) {
+  constructor(name: string, shapeCoords: number[][], width: number | undefined = undefined) {
+    this.name = name;
+
     if (width === undefined)
       width = Math.max(...shapeCoords.flat());
     this.shapes = Array(4).fill(Array(width));
@@ -317,8 +328,8 @@ class KickTableSet {
     this.shapeMap = shapeMap;
   }
 
-  getResult(shape: string, xy: XY, direction: Direction, rotation: RotationType, collider: (shape: string, xy: XY, direction: Direction) => boolean): {xy: XY, kickNumber: number} | undefined {
-    return this.tables[this.shapeMap[shape]].getResult(shape, xy, direction, rotation, collider);
+  getResult(piece: FieldPiece, rotation: RotationType, funcIsOverlap: (piece: FieldPiece) => boolean): {xy: XY, kickNumber: number} | undefined {
+    return this.tables[this.shapeMap[piece.shape.name]].getResult(piece, rotation, funcIsOverlap);
   }
 }
 
@@ -347,30 +358,241 @@ class KickTable {
     };
   }
 
-  getResult(shape: string, xy: XY, direction: Direction, rotation: RotationType, collider: (shape: string, xy: XY, direction: Direction) => boolean): {xy: XY, kickNumber: number} | undefined {
-    let table = this.tables[rotation].table[direction];
-    let newDirection = this.getNewDirection(direction, rotation);
+  getResult(piece: FieldPiece, rotation: RotationType, funcIsOverlap: (piece: FieldPiece) => boolean): {xy: XY, kickNumber: number} | undefined {
+    let table = this.tables[rotation].table[piece.direction];
     for (let i = 0; i < table.length; i++) {
-      if (collider(shape, xy.add(table[i]), newDirection))
+      if (funcIsOverlap(piece.rotated(rotation)))
         continue;
-      return {xy: xy.add(table[i]), kickNumber: i};
+      return {xy: piece.xy.add(table[i]), kickNumber: i};
     }
     return undefined;
   }
+}
 
-  private getNewDirection(direction: Direction, rotation: RotationType): Direction {
+class FieldPiece {
+  shape: Shape;
+  xy: XY;
+  direction: Direction;
+
+  constructor(shape: Shape, lowerEdgeAtSpawn: number);
+  constructor(shape: Shape, xy: XY, direction: Direction);
+  constructor(shape: Shape, arg2: any, arg3?: any) {
+    if (typeof arg2 === "number") {
+      this.shape = shape;
+      this.xy = shape.spawnsAt(arg2);
+      this.direction = 0;
+    }
+    else {
+      this.shape = shape;
+      this.xy = arg2;
+      this.direction = arg3;
+    }
+  }
+
+  getAllBlocksXy(): XY[] {
+    return this.shape.get(this.direction).map(e => e.add(this.xy));
+  }
+
+  rotated(rotation: RotationType): FieldPiece {
     const addends = {"cw": 1, "180": 2, "ccw": 3};
-    let newDirection = (direction + addends[rotation]) % 4;
-    if (newDirection === 3) return 3;
-    if (newDirection === 2) return 2;
-    if (newDirection === 1) return 1;
-    return 0;
+    return new FieldPiece(this.shape, this.xy, (this.direction + addends[rotation]) % 4 as Direction);
+  }
+
+  movedTo(xy: XY): FieldPiece {
+    return new FieldPiece(this.shape, xy, this.direction);
+  }
+
+  movedOf(dxy: XY): FieldPiece {
+    return new FieldPiece(this.shape, this.xy.add(dxy), this.direction);
   }
 }
 
 class Field {
-  
+  fieldData: string[][];
+  width: number;
+  heightVisible: number;
+  height: number;
+  blockSet: BlockSet;
+
+  constructor({width, height, topOutHeight, blockSet}: {width: number, height: number, topOutHeight: number, blockSet: BlockSet}) {
+    this.fieldData = Array(width).fill(Array(topOutHeight).fill(Blocks.empty));
+    this.width = width;
+    this.heightVisible = height;
+    this.height = topOutHeight;
+    this.blockSet = blockSet;
+  }
+
+  isOverlap(piece: FieldPiece): boolean {
+    for (let xy of piece.getAllBlocksXy()) {
+      if (xy.x < 0 || xy.x >= this.width || xy.y < 0 || xy.y >= this.height)
+        return true;
+      if (this.fieldData[xy.x][xy.y] !== Blocks.empty)
+        return true;
+    }
+    return false;
+  }
+
+  getGroundedPiece(piece: FieldPiece): FieldPiece {
+    for (let y = piece.xy.y; y >= 0; y--) {
+      if (this.isOverlap(piece.movedTo(new XY(piece.xy.x, y))))
+        return piece.movedTo(new XY(piece.xy.x, y + 1));
+    }
+    return piece.movedTo(new XY(piece.xy.x, 0));
+  }
 }
 
-export {Shape, PieceBag, KickTable, KickTableSet};
-export type {BlockSet as BagSet};
+type FieldPieceSettings = {
+  spawnsLowerEdgeMin: number;
+  spawnsLowerEdgeMax: number;
+  onNextOut: Function;
+  onHoldBlocked: Function;
+}
+
+class FieldPieceController {
+  field: Field;
+  kickTables: KickTableSet;
+  pieceBag: PieceBag;
+  shapeDict: ShapeDict;
+
+  piece: FieldPiece;
+  holdedPiece: Shape | undefined = undefined;
+  settings: FieldPieceSettings;
+
+  constructor(field: Field, kickTables: KickTableSet, pieceBag: PieceBag, shapeDict: ShapeDict, settings: FieldPieceSettings) {
+    this.field = field;
+    this.kickTables = kickTables;
+    this.pieceBag = pieceBag;
+    this.shapeDict = shapeDict;
+    this.settings = settings;
+
+    let next = this.pieceBag.pickNext();
+    if (next === undefined)
+      throw new Error("No Next As Of Initialization");
+    
+    let newPiece = this.getPiece(next);
+    if (newPiece === undefined)
+      throw new Error("Already Blocked Out As Of Initialization");
+    this.piece = newPiece;
+  }
+
+  moveLeft(count: number) {
+    let dx;
+    for (dx = 0; dx < count; dx++) {
+      if (this.field.isOverlap(this.piece.movedOf(new XY(-dx - 1, 0))))
+        break;
+    }
+    this.piece = this.piece.movedOf(new XY(-dx, 0));
+  }
+
+  moveRight(count: number) {
+    let dx;
+    for (dx = 0; dx < count; dx++) {
+      if (this.field.isOverlap(this.piece.movedOf(new XY(dx + 1, 0))))
+        break;
+    }
+    this.piece = this.piece.movedOf(new XY(dx, 0));
+  }
+
+  softDrop(count: number) {
+    let dy;
+    for (dy = 0; dy < count; dy++) {
+      if (this.field.isOverlap(this.piece.movedOf(new XY(0, -dy - 1))))
+        break;
+    }
+    this.piece = this.piece.movedOf(new XY(0, -dy - 1));
+  }
+
+  hardDrop() {
+    this.piece = this.field.getGroundedPiece(this.piece);
+  }
+
+  rotate(rotation: RotationType) {
+    let kickResult = this.kickTables.getResult(this.piece, rotation, this.field.isOverlap);
+    if (kickResult !== undefined) {
+      this.piece = this.piece.rotated(rotation).movedOf(kickResult.xy);
+    }
+  }
+
+  swapHold() {
+    if (this.holdedPiece === undefined) {
+      this.holdedPiece = this.piece.shape;
+      this.pullNext();
+    }
+    else {
+      let tmp = this.getPiece(this.holdedPiece.name);
+      if (tmp === undefined) {
+        this.settings.onHoldBlocked();
+        return;
+      }
+      this.holdedPiece = this.piece.shape;
+      this.piece = tmp;
+    }
+  }
+
+  pullNext() {
+    let next = this.pieceBag.pickNext();
+    if (next === undefined) {
+      this.settings.onNextOut();
+      return;
+    }
+
+    let newPiece = this.getPiece(next);
+    if (newPiece === undefined) {
+      this.settings.onNextOut();
+      return;
+    }
+    this.piece = newPiece;
+  }
+
+  private getPiece(pieceName: string): FieldPiece | undefined {
+    let newPiece = new FieldPiece(this.shapeDict[pieceName], this.settings.spawnsLowerEdgeMin);
+    while (this.field.isOverlap(newPiece)) {
+      newPiece = newPiece.movedTo(new XY(0, 1));
+      if (newPiece.xy.y === this.settings.spawnsLowerEdgeMin)
+        return undefined;
+    }
+    return newPiece;
+  }
+}
+
+class GameCycle {
+  field: Field;
+  kickTables: KickTableSet;
+  pieceBag: PieceBag;
+  shapeDict: ShapeDict;
+  fieldPieceController: FieldPieceController;
+
+  constructor(field: Field, kickTables: KickTableSet, pieceBag: PieceBag, shapeDict: ShapeDict, fieldPieceController: FieldPieceController) {
+    this.field = field;
+    this.kickTables = kickTables;
+    this.pieceBag = pieceBag;
+    this.shapeDict = shapeDict;
+    this.fieldPieceController = fieldPieceController;
+  }
+}
+
+class GameInitializer {
+  static createGameCycle(gameSettings: GameSettings): GameCycle {
+    let field = new Field({
+      width: gameSettings.fieldWidth,
+      height: gameSettings.fieldHeight,
+      topOutHeight: gameSettings.fieldHeight + 20,
+      blockSet: Blocks[gameSettings.blockSet],
+    });
+    let kickTables = KickTableSets[gameSettings.kickTable];
+    let pieceBag = new PieceBag(gameSettings.bagPattern, Blocks[gameSettings.blockSet]);
+    let shapeDict = ShapeSets[gameSettings.shapeSet];
+    let controller = new FieldPieceController(field, kickTables, pieceBag, shapeDict, {
+      spawnsLowerEdgeMin: gameSettings.spawnY,
+      spawnsLowerEdgeMax: gameSettings.spawnYMax,
+      onNextOut: () => console.log("Next Out"),
+      onHoldBlocked: () => console.log("Hold Blocked"),
+    });
+    let gameCycle = new GameCycle(field, kickTables, pieceBag, shapeDict, controller);
+
+    return gameCycle;
+  }
+}
+
+export {Shape, PieceBag, KickTable, KickTableSet, GameInitializer};
+export type {BlockSet, ShapeDict};

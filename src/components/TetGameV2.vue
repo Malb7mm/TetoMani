@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { PieceBag } from './v2/v2logic';
 import { BagSets } from './v2/v2consts';
+import { InputReciever } from './v2/v2inputreciever';
+import type { ControlIds } from './v2/v2playersettings';
 
-let piecebag: PieceBag;
-piecebag = new PieceBag("[@:6][@]*2", BagSets.bag7);
+let piecebag = new PieceBag("[@:6][@]*2", BagSets.bag7);
 piecebag.elementRoot.generateQueue();
 console.log(piecebag);
 
@@ -19,6 +20,13 @@ function getNexts() {
 function getVirtualNexts() {
   console.log(piecebag.getVirtualNexts(2));
 }
+
+let inputReciever = new InputReciever();
+let inputString = "";
+function update() {
+  let inputs = inputReciever.getAllActive();
+  let inputString = Array.from(inputs).join(", ");
+}
 </script>
 
 <template>
@@ -27,6 +35,7 @@ function getVirtualNexts() {
     <div @click="pickNext()">ピック</div>
     <div @click="getNexts()">ネクスト</div>
     <div @click="getVirtualNexts()">仮想ネクスト</div>
+    {{inputString}}
   </div>
   <div id="debugref" v-if="false">
   </div>

@@ -1,4 +1,6 @@
 import {Shape, KickTable, KickTableSet} from "./v2logic";
+import type {ShapeDict} from "./v2logic";
+import type {KeyAssignments} from "./v2playersettings";
 
 class KickTableSets {
   static readonly srsPlus_Gen = new KickTable({
@@ -56,22 +58,24 @@ class KickTableSets {
 }
 
 class ShapeSets {
-  static readonly shapes: { [key: string]: Shape } = {
-    I: new Shape([[0, 2], [1, 2], [2, 2], [3, 2]], 4),
-    O: new Shape([[1, 1], [1, 2], [2, 1], [2, 2]], 4),
-    T: new Shape([[1, 2], [0, 1], [1, 1], [2, 1]], 3),
-    L: new Shape([[2, 2], [0, 1], [1, 1], [2, 1]], 3),
-    J: new Shape([[0, 2], [0, 1], [1, 1], [2, 1]], 3),
-    S: new Shape([[1, 2], [2, 2], [0, 1], [1, 1]], 3),
-    Z: new Shape([[0, 2], [1, 2], [1, 1], [2, 1]], 3),
+  static readonly standard: ShapeDict = {
+    I: new Shape("I", [[0, 2], [1, 2], [2, 2], [3, 2]], 4),
+    O: new Shape("O", [[1, 1], [1, 2], [2, 1], [2, 2]], 4),
+    T: new Shape("T", [[1, 2], [0, 1], [1, 1], [2, 1]], 3),
+    L: new Shape("L", [[2, 2], [0, 1], [1, 1], [2, 1]], 3),
+    J: new Shape("J", [[0, 2], [0, 1], [1, 1], [2, 1]], 3),
+    S: new Shape("S", [[1, 2], [2, 2], [0, 1], [1, 1]], 3),
+    Z: new Shape("Z", [[0, 2], [1, 2], [1, 1], [2, 1]], 3),
   }
 }
 
-class BlockSets {
+class Blocks {
   static readonly empty = ".";
   static readonly neutral = "#";
 
   static readonly standard = ["I", "O", "T", "L", "J", "S", "Z"];
+
+
 }
 
 class BagSets {
@@ -79,4 +83,42 @@ class BagSets {
   static readonly bag14 = this.bag7.concat(this.bag7);
 }
 
-export {ShapeSets, BagSets, BlockSets, KickTableSets}
+class KeyAssignmentPresets {
+  static readonly defaults: KeyAssignments = {
+    moveLeft: [
+      {"key": "ArrowLeft", "func": []}
+    ],
+    moveRight: [
+      {"key": "ArrowRight", "func": []}
+    ],
+    softDrop: [
+      {"key": "ArrowDown", "func": []}
+    ],
+    hardDrop: [
+      {"key": "ArrowUp", "func": []}
+    ],
+    rotateCCW: [
+      {"key": "KeyZ", "func": []}
+    ],
+    rotateCW: [
+      {"key": "KeyX", "func": []}
+    ],
+    rotate180: [
+      {"key": "KeyC", "func": []}
+    ],
+    hold: [
+      {"key": "ShiftLeft", "func": []}
+    ],
+    pause: [
+      {"key": "KeyQ", "func": []}
+    ],
+    retry: [
+      {"key": "KeyR", "func": []}
+    ],
+    exit: [
+      {"key": "Escape", "func": []}
+    ],
+  };
+}
+
+export {ShapeSets, BagSets, Blocks, KickTableSets, KeyAssignmentPresets};
