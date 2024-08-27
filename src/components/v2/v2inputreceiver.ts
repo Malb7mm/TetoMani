@@ -1,8 +1,7 @@
 import { KeyAssignmentPresets } from "./v2consts";
 import type { KeyAssignments, ControlId, FunctionKey, CombinedKeys } from "./v2playersettings";
-import { controlIds, functionKeys } from "./v2playersettings";
 
-class InputReciever {
+class InputReceiver {
   activeControls: Set<ControlId> = new Set();
   keyAssignsReverseLookup: Map<CombinedKeys, ControlId> = new Map();
 
@@ -74,4 +73,4 @@ class InputReciever {
   }
 }
 
-export {InputReciever};
+export {InputReceiver};
