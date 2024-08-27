@@ -122,7 +122,7 @@ class KeyAssignmentPresets {
       {"key": "KeyZ", "func": ["ctrl"]}
     ],
     redo: [
-      {"key": "KeyZ", "func": ["shift"]}
+      {"key": "KeyY", "func": ["ctrl"]}
     ]
   }));
 }

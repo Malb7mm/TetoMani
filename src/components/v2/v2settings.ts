@@ -15,7 +15,7 @@ class GameSettings {
   spawnY: number = 22;
   spawnYMax: number = 22;
 
-  bagPattern: string = "";
+  bagPattern: string = "[@]~";
   resetOnRunOutBag: boolean = true;
 
   enableUndo: boolean = false;

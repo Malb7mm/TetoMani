@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { PieceBag } from './v2/v2logic';
 import { BagSets } from './v2/v2consts';
-import { InputReciever } from './v2/v2inputreciever';
-import type { ControlId } from './v2/v2playersettings';
+import { InputReceiver } from './v2/v2inputreceiver';
 import { ref } from 'vue';
 
-let piecebag = new PieceBag("[@:6][@]*2", BagSets.bag7);
+let piecebag = new PieceBag("[@:6][@]~", BagSets.bag7);
 piecebag.elementRoot.generateQueue();
 
 function showBag() {
@@ -21,10 +20,10 @@ function getVirtualNexts() {
   console.log(piecebag.getVirtualNexts(2));
 }
 
-let inputReciever = new InputReciever();
+let inputReceiver = new InputReceiver();
 let inputString = ref("test");
 function update() {
-  let inputs = inputReciever.getAllActive();
+  let inputs = inputReceiver.getAllActive();
   inputString.value = Array.from(inputs).join(", ");
   requestAnimationFrame(update);
 }
@@ -33,13 +32,13 @@ update();
 
 <template>
   <div id="tetgame">
+  </div>
+  <div id="debugref" v-if="true">
     <div @click="showBag()">バッグ出力</div>
     <div @click="pickNext()">ピック</div>
     <div @click="getNexts()">ネクスト</div>
     <div @click="getVirtualNexts()">仮想ネクスト</div>
     {{ inputString }}
-  </div>
-  <div id="debugref" v-if="false">
   </div>
 </template>
 
