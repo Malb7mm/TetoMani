@@ -84,7 +84,7 @@ class BagSets {
 }
 
 class KeyAssignmentPresets {
-  static readonly defaults: KeyAssignments = {
+  static readonly defaults: KeyAssignments = new Map(Object.entries({
     moveLeft: [
       {"key": "ArrowLeft", "func": []}
     ],
@@ -118,7 +118,13 @@ class KeyAssignmentPresets {
     exit: [
       {"key": "Escape", "func": []}
     ],
-  };
+    undo: [
+      {"key": "KeyZ", "func": ["ctrl"]}
+    ],
+    redo: [
+      {"key": "KeyZ", "func": ["shift"]}
+    ]
+  }));
 }
 
 export {ShapeSets, BagSets, Blocks, KickTableSets, KeyAssignmentPresets};

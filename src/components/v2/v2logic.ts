@@ -1,7 +1,4 @@
 /// <reference lib="es2021" />
-import { Blocks, ShapeSets, KickTableSets } from "./v2consts";
-import { GameSettings } from "./v2settings";
-
 type BlockSet = string[];
 type ShapeDict = { [key: string]: Shape };
 type RotationType = "cw" | "ccw" | "180";
@@ -413,20 +410,22 @@ class Field {
   heightVisible: number;
   height: number;
   blockSet: BlockSet;
+  emptyBlock: string;
 
-  constructor({width, height, topOutHeight, blockSet}: {width: number, height: number, topOutHeight: number, blockSet: BlockSet}) {
-    this.fieldData = Array(width).fill(Array(topOutHeight).fill(Blocks.empty));
+  constructor({width, height, topOutHeight, blockSet, emptyBlock}: {width: number, height: number, topOutHeight: number, blockSet: BlockSet, emptyBlock: string}) {
+    this.fieldData = Array(width).fill(Array(topOutHeight).fill(emptyBlock));
     this.width = width;
     this.heightVisible = height;
     this.height = topOutHeight;
     this.blockSet = blockSet;
+    this.emptyBlock = emptyBlock;
   }
 
   isOverlap(piece: FieldPiece): boolean {
     for (let xy of piece.getAllBlocksXy()) {
       if (xy.x < 0 || xy.x >= this.width || xy.y < 0 || xy.y >= this.height)
         return true;
-      if (this.fieldData[xy.x][xy.y] !== Blocks.empty)
+      if (this.fieldData[xy.x][xy.y] !== this.emptyBlock)
         return true;
     }
     return false;
@@ -555,44 +554,5 @@ class FieldPieceController {
   }
 }
 
-class GameCycle {
-  field: Field;
-  kickTables: KickTableSet;
-  pieceBag: PieceBag;
-  shapeDict: ShapeDict;
-  fieldPieceController: FieldPieceController;
-
-  constructor(field: Field, kickTables: KickTableSet, pieceBag: PieceBag, shapeDict: ShapeDict, fieldPieceController: FieldPieceController) {
-    this.field = field;
-    this.kickTables = kickTables;
-    this.pieceBag = pieceBag;
-    this.shapeDict = shapeDict;
-    this.fieldPieceController = fieldPieceController;
-  }
-}
-
-class GameInitializer {
-  static createGameCycle(gameSettings: GameSettings): GameCycle {
-    let field = new Field({
-      width: gameSettings.fieldWidth,
-      height: gameSettings.fieldHeight,
-      topOutHeight: gameSettings.fieldHeight + 20,
-      blockSet: Blocks[gameSettings.blockSet],
-    });
-    let kickTables = KickTableSets[gameSettings.kickTable];
-    let pieceBag = new PieceBag(gameSettings.bagPattern, Blocks[gameSettings.blockSet]);
-    let shapeDict = ShapeSets[gameSettings.shapeSet];
-    let controller = new FieldPieceController(field, kickTables, pieceBag, shapeDict, {
-      spawnsLowerEdgeMin: gameSettings.spawnY,
-      spawnsLowerEdgeMax: gameSettings.spawnYMax,
-      onNextOut: () => console.log("Next Out"),
-      onHoldBlocked: () => console.log("Hold Blocked"),
-    });
-    let gameCycle = new GameCycle(field, kickTables, pieceBag, shapeDict, controller);
-
-    return gameCycle;
-  }
-}
-
-export {Shape, PieceBag, KickTable, KickTableSet, GameInitializer};
+export {Field, FieldPieceController, Shape, PieceBag, KickTable, KickTableSet};
 export type {BlockSet, ShapeDict};

@@ -1,24 +1,28 @@
 import { KeyAssignmentPresets } from "./v2consts";
 
-type FunctionKeys = "ctrl" | "shift" | "alt";
+const functionKeys = ["shift", "ctrl", "alt"];
+type FunctionKey = typeof functionKeys[number];
 
 type CombinedKeys = {
   key: string;
-  func: FunctionKeys[];
+  func: FunctionKey[];
 };
 
-type ControlIds = 
-  "moveLeft" | 
-  "moveRight" |
-  "softDrop" |
-  "hardDrop" |
-  "rotateCCW" |
-  "rotateCW" |
-  "rotate180" |
-  "hold" |
-  "pause" |
-  "retry" |
-  "exit";
+const controlIds = [
+  "moveLeft", 
+  "moveRight", 
+  "softDrop", 
+  "hardDrop", 
+  "rotateCCW", 
+  "rotateCW", 
+  "rotate180", 
+  "hold", 
+  "pause", 
+  "retry", 
+  "exit",
+  "undo",
+  "redo"];
+type ControlId = typeof controlIds[number];
 
 type Handlings = {
   autoRepeatRate_Frame: number;
@@ -29,7 +33,7 @@ type Handlings = {
   doLockHardDrop: boolean;
 }
 
-type KeyAssignments = { [key in ControlIds]: CombinedKeys[] };
+type KeyAssignments = Map<ControlId, CombinedKeys[]>;
 
 class PlayerSettings {
   static readonly version: number = 1;
@@ -51,5 +55,5 @@ class PlayerSettings {
   }
 }
 
-export {PlayerSettings};
-export type {CombinedKeys, KeyAssignments, ControlIds}
+export {PlayerSettings, controlIds, functionKeys};
+export type {CombinedKeys, KeyAssignments, ControlId, FunctionKey};
