@@ -269,7 +269,7 @@ class GameVariables {
 let v = new GameVariables();
 
 let container;
-let pixiapp: PIXI.Application<HTMLCanvasElement>;
+let pixiapp: PIXI.Application;
 let gameLoopInterval: number;
 
 function sequential(first: number, length: number) {
@@ -308,16 +308,18 @@ const blockTexId = ["bRed", "bOrange", "bYellow", "bGreen", "bBlue", "bCyan", "b
 
 onMounted(async () => {
   container = document.getElementById("tetgame");
-  pixiapp = new PIXI.Application<HTMLCanvasElement>({
+  pixiapp = new PIXI.Application();
+  await pixiapp.init({
     resizeTo: container!,
     backgroundAlpha: 0,
     resolution: window.devicePixelRatio || 1,
     autoDensity: true,
   });
-  container!.appendChild(pixiapp.view);
 
-  appWidth = parseFloat(pixiapp.view.style.width);
-  appHeight = parseFloat(pixiapp.view.style.height);
+  container!.appendChild(pixiapp.canvas);
+
+  appWidth = parseFloat(pixiapp.canvas.style.width);
+  appHeight = parseFloat(pixiapp.canvas.style.height);
   fieldWidth = appHeight * FIELD_HEIGHT_SCALE / 2;
   fieldHeight = fieldWidth * 2;
 
@@ -383,8 +385,8 @@ function drawField() {
   let width = fieldWidth;
   let height = fieldHeight;
 
-  field.beginFill(0x111111);
-  field.drawRect(-width / 2, -height / 2, width, height);
+  field.rect(-width / 2, -height / 2, width, height);
+  field.fill({color: 0x111111});
 }
 
 function drawGrid() {
@@ -397,22 +399,22 @@ function drawGrid() {
   let right = fWidth / 2;
   let bottom = fHeight / 2;
 
-  grid.lineStyle(1.6, 0x333333);
-
   for (let i = -4; i <= 4; i++) {
     let x = i * gWidth;
     grid.moveTo(x, bottom);
     grid.lineTo(x, top);
+    grid.stroke({width: 1.6, color: 0x333333})
   }
   for (let i = -9; i <= 9; i++) {
     let y = i * gWidth;
     grid.moveTo(left, y);
     grid.lineTo(right, y);
+    grid.stroke({width: 1.6, color: 0x333333})
   }
 
-  grid.lineStyle(4.8, 0x779988);
   grid.moveTo(0, top).lineTo(right, top).lineTo(right, bottom)
     .lineTo(left, bottom).lineTo(left, top).lineTo(0, top);
+    grid.stroke({width: 4.8, color: 0x779988})
 }
 
 function drawUIField() {
@@ -425,12 +427,12 @@ function drawUIField() {
   let nfBottom = nfTop + nfHeight;
   let nfTopCenterX = (nfLeft + nfRight) / 2;
 
-  uis.beginFill(0x111111);
-  uis.drawRect(nfLeft, nfTop, nfWidth, nfHeight);
+  uis.rect(nfLeft, nfTop, nfWidth, nfHeight);
+  uis.fill({color: 0x111111});
 
-  uis.lineStyle(4.8, 0x779988);
   uis.moveTo(nfTopCenterX, nfTop).lineTo(nfRight, nfTop).lineTo(nfRight, nfBottom)
     .lineTo(nfLeft, nfBottom).lineTo(nfLeft, nfTop).lineTo(nfTopCenterX, nfTop);
+  uis.stroke({width: 4.8, color: 0x779988});
 
   let hWidth = nfWidth;
   let hHeight = fieldHeight * INFO_PIECE_HEIGHT_SCALE + INFO_PADDING_PX * 2;
@@ -441,12 +443,12 @@ function drawUIField() {
   let hBottom = hTop + hHeight;
   let hTopCenterX = (hLeft + hRight) / 2;
 
-  uis.beginFill(0x111111);
-  uis.drawRect(hLeft, hTop, hWidth, hHeight);
+  uis.rect(hLeft, hTop, hWidth, hHeight);
+  uis.fill({color: 0x111111});
 
-  uis.lineStyle(4.8, 0x779988);
   uis.moveTo(hTopCenterX, hTop).lineTo(hRight, hTop).lineTo(hRight, hBottom)
     .lineTo(hLeft, hBottom).lineTo(hLeft, hTop).lineTo(hTopCenterX, hTop);
+  uis.stroke({width: 4.8, color: 0x779988});
 }
 
 function drawBlock(blockId: number, bx: number, by: number) {

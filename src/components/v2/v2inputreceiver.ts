@@ -43,13 +43,10 @@ class InputReceiver {
 
   getAssignedControl(e: KeyboardEvent): ControlId | undefined {
     for (let [comb, ctrlId] of this.keyAssignsReverseLookup) {
-      console.log(comb.key, e.code);
       if (comb.key !== e.code) continue;
-      console.log(comb.func, e.shiftKey, e.ctrlKey, e.altKey);
       if (comb.func.includes("shift") && !e.shiftKey) continue;
       if (comb.func.includes("ctrl") && !e.ctrlKey) continue;
       if (comb.func.includes("alt") && !e.altKey) continue;
-      console.log("passed");
       return ctrlId;
     }
     return undefined;

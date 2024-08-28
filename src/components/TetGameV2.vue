@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { PieceBag } from './v2/v2logic';
-import { BagSets } from './v2/v2consts';
+import { BagSets, Blocks, ShapeSets } from './v2/v2consts';
 import { InputReceiver } from './v2/v2inputreceiver';
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { Drawer } from './v2/v2drawer';
 
-let piecebag = new PieceBag("[@:6][@]~", BagSets.bag7);
+let piecebag = new PieceBag("[@]~", BagSets.bag7);
 piecebag.elementRoot.generateQueue();
 
 function showBag() {
@@ -20,6 +21,62 @@ function getVirtualNexts() {
   console.log(piecebag.getVirtualNexts(2));
 }
 
+onMounted(async () => {
+  let container = document.getElementById("tetgamev2")!;
+  let drawer = new Drawer(container, Blocks.empty, ShapeSets.standard);
+  await drawer.init();
+  await drawer.loadAssets();
+  drawer.setNextAndHoldCount(5, 1);
+  let fieldData = [
+    "OO.LLLIJJJ".split(""),
+    "OO.SSLIJZZ".split(""),
+    "J...SSIZZI".split(""),
+    "J..TTTIOOI".split(""),
+    "JJ.LT..OOI".split(""),
+    "...L.....I".split(""),
+    "..LL......".split(""),
+  ];
+  drawer.updateFieldBlocks(fieldData[0].map((_, colIndex) => fieldData.map(row => row[colIndex])));
+  setTimeout(() => {
+    fieldData = [
+      "OO.LLLIJJJ".split(""),
+      "OO.SSLIJZZ".split(""),
+      "J...SSIZZI".split(""),
+      "J..TTTIOOI".split(""),
+      "JJ.LTSZOOI".split(""),
+      "...LSSZZ.I".split(""),
+      "..LLS..Z..".split(""),
+    ];
+    drawer.updateFieldBlocks(fieldData[0].map((_, colIndex) => fieldData.map(row => row[colIndex])));
+  }, 4000);
+  setTimeout(() => {
+    fieldData = [
+      "OO.LLLIJJJ".split(""),
+      "OOTSSLIJZZ".split(""),
+      "JTTTSSIZZI".split(""),
+      "J..TTTIOOI".split(""),
+      "JJ.LTSZOOI".split(""),
+      "...LSSZZ.I".split(""),
+      "..LLS..Z..".split(""),
+    ];
+    drawer.updateFieldBlocks(fieldData[0].map((_, colIndex) => fieldData.map(row => row[colIndex])));
+  }, 6000);
+  setTimeout(() => {
+    fieldData = [
+      "OO.LLLIJJJ".split(""),
+      "J..TTTIOOI".split(""),
+      "JJ.LTSZOOI".split(""),
+      "...LSSZZ.I".split(""),
+      "..LLS..Z..".split(""),
+      "..........".split(""),
+      "..........".split(""),
+    ];
+    drawer.updateFieldBlocks(fieldData[0].map((_, colIndex) => fieldData.map(row => row[colIndex])));
+  }, 8000);
+  drawer.updateNextQueue(["I", "S", "J", "T", "O",]);
+  drawer.updateHoldQueue(["Z"]);
+});
+
 let inputReceiver = new InputReceiver();
 let inputString = ref("test");
 function update() {
@@ -31,7 +88,7 @@ update();
 </script>
 
 <template>
-  <div id="tetgame">
+  <div id="tetgamev2">
   </div>
   <div id="debugref" v-if="true">
     <div @click="showBag()">バッグ出力</div>
@@ -43,7 +100,7 @@ update();
 </template>
 
 <style scoped>
-#tetgame {
+#tetgamev2 {
   user-select: none;
   min-height: 90vh;
   min-width: 100vh;

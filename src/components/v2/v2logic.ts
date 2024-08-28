@@ -1,42 +1,25 @@
 /// <reference lib="es2021" />
+import { XY } from "./v2structs";
+
 type BlockSet = string[];
 type ShapeDict = { [key: string]: Shape };
 type RotationType = "cw" | "ccw" | "180";
 type Direction = 0 | 1 | 2 | 3;
 
-/**
- * Yは0が下！
- */
-class XY {
-  x: number = 0;
-  y: number = 0;
-
-  constructor(x: number, y: number) {
-    this.x = x;
-    this.y = y;
-  }
-
-  add(xy: XY): XY;
-  add(x: number, y: number): XY;
-  add(arg1: any, arg2?: any): XY {
-    if (arg1 instanceof XY)
-      return new XY(this.x + arg1.x, this.y + arg1.y);
-    else
-      return new XY(this.x + arg1, this.y + arg2);
-  }
-}
-
 class Shape {
   // XY[向き][i番目のブロック]の座標
   name: string;
   shapes: XY[][]
+  width: number;
 
   constructor(name: string, shapeCoords: number[][], width: number | undefined = undefined) {
     this.name = name;
 
     if (width === undefined)
       width = Math.max(...shapeCoords.flat());
-    this.shapes = Array(4).fill(Array(width));
+    this.width = width;
+    this.shapes = Array(4).fill(null).map(() => Array(4));
+    for (let i = 0; i < this.shapes.length; i++)
 
     for (let i = 0; i < shapeCoords.length; i++) {
       let x = shapeCoords[i][0];
@@ -46,7 +29,8 @@ class Shape {
       this.shapes[0][i] = new XY(x, y);
       for (let direction = 1; direction < 4; direction++) {
         // 右回りに格納
-        this.shapes[direction][i] = new XY(maxIndex - y, x);
+        let prev = this.shapes[direction - 1][i];
+        this.shapes[direction][i] = new XY(maxIndex - prev.y, prev.x);
       }
     }
   }
@@ -70,15 +54,20 @@ class Shape {
 
     return new XY(x, y);
   }
+
+  get heightOnInitialDirection(): number {
+    return  Math.max(...this.shapes[0].map(e => e.y));
+  }
 }
 
 type BagElementType = "single" | "grouped" | "random-grouped";
 
 class PieceBagElement {
   consumedCount: number = 0;
-  elementType: BagElementType;
-  doMidwayTerminate: boolean;
   terminate: number;
+  doMidwayTerminate: boolean;
+
+  elementType: BagElementType;
   value: PieceBagElement[] | string;
   queue: string[] = [];
 
@@ -93,21 +82,23 @@ class PieceBagElement {
   }
 
   shallowCopy(): PieceBagElement {
+    let e: PieceBagElement;
     if (typeof this.value === "string") {
-      return new PieceBagElement("single", this.value);
+      e = new PieceBagElement("single", this.value);
     }
     else if (this.value instanceof Array) {
-      let e: PieceBagElement;
       if (this.elementType === "grouped")
         e = new PieceBagElement("grouped");
       else
         e = new PieceBagElement("random-grouped", this.terminate);
       e.add(this.value);
-      return e;
     }
     else { // 分岐することはない（コンパイラ用）
       throw new Error("");
     }
+    e.consumedCount = this.consumedCount;
+    e.queue = [...this.queue];
+    return e;
   }
 
   add(elements: PieceBagElement[]) {
@@ -167,15 +158,18 @@ class PieceBagElement {
       this.queue = queue;
     }
 
+    this.consumedCount = 0;
     return this.queue;
   }
 
-  addQueueFromLastElement(): string[] {
+  duplicateLastElement() {
     if (!(this.value instanceof Array))
-        return [];
-    let additionalQueue = this.value[this.value.length - 1].generateQueue();
+        return;
+    let e = this.value[this.value.length - 1].shallowCopy();
+    this.add([e]);
+    let additionalQueue = e.generateQueue();
     this.queue = this.queue.concat(additionalQueue);
-    return additionalQueue;
+    return;
   }
 
   isAllConsumed(): boolean {
@@ -286,7 +280,7 @@ class PieceBag {
   pickNext(): string | undefined {
     if (this.elementRoot.isAllConsumed())
       if (this.doLoopLastElement)
-        this.elementRoot.addQueueFromLastElement();
+        this.elementRoot.duplicateLastElement();
       else
         return undefined;
     return this.elementRoot.pick();
@@ -295,7 +289,7 @@ class PieceBag {
   getNexts(count: number): string[] {
     if (this.doLoopLastElement)
       while (this.elementRoot.queue.length < count)
-        this.elementRoot.addQueueFromLastElement();
+        this.elementRoot.duplicateLastElement();
     return this.elementRoot.queue.slice(0, count);
   }
 
@@ -304,13 +298,17 @@ class PieceBag {
       throw new Error("for compiler");
     let result: String[][] = [];
     let cnt = 0;
-    for (let element of this.elementRoot.value) {
+    for (let i = 0; i < this.elementRoot.value.length; i++) {
+      let element = this.elementRoot.value[i];
+
       if (element.isAllConsumed()) continue;
       let virtualNexts = element.getValuesSorted();
       result.push(virtualNexts);
 
       cnt++;
-      if (cnt == bagCount) break;
+      if (cnt === bagCount) break;
+      if (i + 1 == this.elementRoot.value.length && this.doLoopLastElement)
+        this.elementRoot.duplicateLastElement();
     }
     return result;
   }
@@ -413,7 +411,7 @@ class Field {
   emptyBlock: string;
 
   constructor({width, height, topOutHeight, blockSet, emptyBlock}: {width: number, height: number, topOutHeight: number, blockSet: BlockSet, emptyBlock: string}) {
-    this.fieldData = Array(width).fill(Array(topOutHeight).fill(emptyBlock));
+    this.fieldData = Array(width).fill(null).map(() => Array(topOutHeight).fill(emptyBlock));
     this.width = width;
     this.heightVisible = height;
     this.height = topOutHeight;
