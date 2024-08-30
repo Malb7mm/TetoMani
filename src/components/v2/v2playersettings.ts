@@ -38,7 +38,7 @@ type KeyAssignments = Map<ControlId, CombinedKeys[]>;
 class PlayerSettings {
   static readonly version: number = 1;
 
-  keyAssignments: KeyAssignments = KeyAssignmentPresets.defaults;
+  keyAssignments: KeyAssignments = KeyAssignmentPresets.malb7mm;
   handlings: Handlings = {
     autoRepeatRate_Frame: 2,
     delayedAutoShift_Frame: 11,

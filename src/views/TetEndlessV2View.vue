@@ -13,7 +13,7 @@ onMounted(() => {
 <template>
   <div class="game-container">
     <KeepAlive>
-      <TetGameV2 id="game-main" ref="tetGame"/>
+      <TetGameV2/>
     </KeepAlive>
   </div>
 </template>

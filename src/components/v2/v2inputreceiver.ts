@@ -14,6 +14,7 @@ class InputReceiver {
         this.activeControls.add(control);
     });
     document.addEventListener("keyup", e => {
+      console.log("keyup:", e.code);
       for (let control of this.getAssignedControlWithoutFunc(e))
         this.activeControls.delete(control);
     });
@@ -30,7 +31,6 @@ class InputReceiver {
     this.keyAssignsReverseLookup = new Map(array.sort((a, b) => {
       return getOrderValue(b[0].func) - getOrderValue(a[0].func);
     }));
-    console.log(this.keyAssignsReverseLookup);
 
     function getOrderValue(funcs: FunctionKey[]): number {
       let values: { [key: string]: number } = {"alt": 4, "ctrl": 2, "shift": 1};
@@ -41,7 +41,7 @@ class InputReceiver {
     }
   }
 
-  getAssignedControl(e: KeyboardEvent): ControlId | undefined {
+  private getAssignedControl(e: KeyboardEvent): ControlId | undefined {
     for (let [comb, ctrlId] of this.keyAssignsReverseLookup) {
       if (comb.key !== e.code) continue;
       if (comb.func.includes("shift") && !e.shiftKey) continue;
@@ -52,7 +52,7 @@ class InputReceiver {
     return undefined;
   }
 
-  getAssignedControlWithoutFunc(e: KeyboardEvent): ControlId[] {
+  private getAssignedControlWithoutFunc(e: KeyboardEvent): ControlId[] {
     let result: ControlId[] = [];
     for (let [comb, ctrlId] of this.keyAssignsReverseLookup) {
       if (comb.key !== e.code) continue;

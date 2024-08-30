@@ -30,7 +30,7 @@ class Shape {
       for (let direction = 1; direction < 4; direction++) {
         // 右回りに格納
         let prev = this.shapes[direction - 1][i];
-        this.shapes[direction][i] = new XY(maxIndex - prev.y, prev.x);
+        this.shapes[direction][i] = new XY(prev.y, maxIndex - prev.x);
       }
     }
   }
@@ -47,7 +47,7 @@ class Shape {
     // Xは幅が偶数なら中央、奇数なら中央左寄り
     // 例：幅4はX=3、幅3もX=3、幅2はX=4
     let width = Math.max(...xCoords) - Math.min(...xCoords);
-    let x = 5 - Math.ceil(width / 2);
+    let x = 4 - Math.floor(width / 2);
 
     // Yはブロックの下端が常に同じ高さにつくように
     let y = lowerEdge - Math.min(...yCoords);
@@ -55,8 +55,17 @@ class Shape {
     return new XY(x, y);
   }
 
+  center(direction: Direction): XY {
+    let xCoords = this.shapes[0].map(e => e.x);
+    let yCoords = this.shapes[0].map(e => e.y);
+    return new XY(
+      (Math.max(...xCoords) + Math.min(...xCoords)) / 2, 
+      (Math.max(...yCoords) + Math.min(...yCoords)) / 2
+    );
+  }
+
   get heightOnInitialDirection(): number {
-    return  Math.max(...this.shapes[0].map(e => e.y));
+    return Math.max(...this.shapes[0].map(e => e.y))
   }
 }
 
@@ -259,6 +268,7 @@ class PieceBag {
 
     this.elementRoot = new PieceBagElement("grouped");
     this.elementRoot.add(stack[0].elements);
+    this.elementRoot.generateQueue();
 
     function getTerminate(beginIndex: number, endIndex: number, defaultv: number): number {
       let s = bagPattern.slice(beginIndex + 1, endIndex).split(":");
@@ -323,8 +333,8 @@ class KickTableSet {
     this.shapeMap = shapeMap;
   }
 
-  getResult(piece: FieldPiece, rotation: RotationType, funcIsOverlap: (piece: FieldPiece) => boolean): {xy: XY, kickNumber: number} | undefined {
-    return this.tables[this.shapeMap[piece.shape.name]].getResult(piece, rotation, funcIsOverlap);
+  getResult(piece: FieldPiece, rotation: RotationType, field: Field): {xy: XY, kickNumber: number} | undefined {
+    return this.tables[this.shapeMap[piece.shape.name]].getResult(piece, rotation, field);
   }
 }
 
@@ -336,8 +346,8 @@ class KickTable {
       for (let i = 0; i < 4; i++) {
         this.table[i] = Array(Math.floor(values[i].length / 2));
   
-        for (let j = 0; j + 1 < values[i].length; j++) {
-          this.table[i][j] = new XY(values[i][j], values[i][j + 1]);
+        for (let j = 0; j + 1 < values[i].length; j += 2) {
+          this.table[i][j/2] = new XY(values[i][j], values[i][j + 1]);
         }
       }
     };
@@ -353,10 +363,10 @@ class KickTable {
     };
   }
 
-  getResult(piece: FieldPiece, rotation: RotationType, funcIsOverlap: (piece: FieldPiece) => boolean): {xy: XY, kickNumber: number} | undefined {
+  getResult(piece: FieldPiece, rotation: RotationType, field: Field): {xy: XY, kickNumber: number} | undefined {
     let table = this.tables[rotation].table[piece.direction];
     for (let i = 0; i < table.length; i++) {
-      if (funcIsOverlap(piece.rotated(rotation)))
+      if (field.isOverlap(piece.rotated(rotation).movedTo(table[i])))
         continue;
       return {xy: piece.xy.add(table[i]), kickNumber: i};
     }
@@ -393,11 +403,11 @@ class FieldPiece {
     return new FieldPiece(this.shape, this.xy, (this.direction + addends[rotation]) % 4 as Direction);
   }
 
-  movedTo(xy: XY): FieldPiece {
+  goneTo(xy: XY): FieldPiece {
     return new FieldPiece(this.shape, xy, this.direction);
   }
 
-  movedOf(dxy: XY): FieldPiece {
+  movedTo(dxy: XY): FieldPiece {
     return new FieldPiece(this.shape, this.xy.add(dxy), this.direction);
   }
 }
@@ -430,11 +440,16 @@ class Field {
   }
 
   getGroundedPiece(piece: FieldPiece): FieldPiece {
-    for (let y = piece.xy.y; y >= 0; y--) {
-      if (this.isOverlap(piece.movedTo(new XY(piece.xy.x, y))))
-        return piece.movedTo(new XY(piece.xy.x, y + 1));
+    for (let y = piece.xy.y; y >= -piece.shape.width; y--) {
+      if (this.isOverlap(piece.goneTo(new XY(piece.xy.x, y))))
+        return piece.goneTo(new XY(piece.xy.x, y + 1));
     }
-    return piece.movedTo(new XY(piece.xy.x, 0));
+    throw new Error("Could not find the intersection");
+  }
+
+  setPieceBlocks(piece: FieldPiece) {
+    for (let xy of piece.getAllBlocksXy())
+      this.fieldData[xy.x][xy.y] = piece.shape.name;
   }
 }
 

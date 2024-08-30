@@ -48,6 +48,38 @@ class ContainerWrapper {
   }
 }
 
+class PieceWrapper extends ContainerWrapper {
+  originalTexture: PIXI.Texture | undefined;
+
+  constructor(container: PIXI.Container, size: XY, parentSize: XY, originalTexture: PIXI.Texture | undefined) {
+    super(container, size, parentSize);
+
+    this.originalTexture = originalTexture;
+  }
+
+  swapTexture(texture: PIXI.Texture) {
+    if (this.originalTexture === undefined)
+      return;
+    
+    for (let c of this.container.children) {
+      if (c instanceof PIXI.Sprite) {
+        c.texture = texture;
+      }
+    }
+  }
+
+  restoreTexture() {
+    if (this.originalTexture === undefined)
+      return;
+
+    for (let c of this.container.children) {
+      if (c instanceof PIXI.Sprite) {
+        c.texture = this.originalTexture;
+      }
+    }
+  }
+}
+
 class DrawerConsts {
   static readonly bgGradient = [0x445460, 0x3a3040];
   static readonly bgPaleGradient = [0x2f536e, 0x8a7489];
@@ -67,38 +99,49 @@ class DrawerConsts {
   ]);
 }
 
+class BlockTexture {
+  texture: PIXI.Texture;
+  alpha: number;
+
+  constructor(texture: PIXI.Texture, alpha: number) {
+    this.texture = texture;
+    this.alpha = alpha;
+  }
+}
+
 class Drawer {
-  pixiapp: PIXI.Application;
-  container: HTMLElement;
-  containerSize: XY;
-  elements: Map<string, ContainerWrapper> = new Map();
-  loader: AssetsLoader = new AssetsLoader();
-  textures: Map<string, PIXI.Texture> = new Map();
-  cachedFieldData: string[][] = [];
-  fieldBlockElements: Map<string, ContainerWrapper> = new Map();
-  cachedNextQueue: string[] = [];
-  cachedHoldQueue: string[] = [];
-  nextQueueElements: ContainerWrapper[] = [];
-  holdQueueElements: ContainerWrapper[] = [];
-  shapeSet: ShapeDict;
+  private pixiapp: PIXI.Application;
+  private container: HTMLElement;
+  private containerSize: XY;
+  private elements: Map<string, ContainerWrapper> = new Map();
+  private loader: AssetsLoader = new AssetsLoader();
+  private textures: Map<string, BlockTexture> = new Map();
+  private cachedFieldData: string[][] = [];
+  private fieldBlockElements: Map<string, ContainerWrapper> = new Map();
+  private cachedNextQueue: string[] = [];
+  private cachedHoldQueue: string[] = [];
+  private nextQueueElements: (PieceWrapper | undefined)[] = [];
+  private holdQueueElements: (PieceWrapper | undefined)[] = [];
+  private shapeSet: ShapeDict = {};
 
-  fieldSize: XY = new XY(0, 0);
-  blockSize: XY = new XY(0, 0);
-  nextBoxSize: XY = new XY(0, 0);
-  holdBoxSize: XY = new XY(0, 0);
+  private fieldSize: XY = new XY(0, 0);
+  private blockSize: XY = new XY(0, 0);
+  private nextBoxSize: XY = new XY(0, 0);
+  private holdBoxSize: XY = new XY(0, 0);
 
-  gridCount: XY = new XY(10, 20);
-  nextCount: number = 5;
-  holdCount: number = 1;
+  private gridCount: XY = new XY(10, 20);
+  private nextCount: number = 5;
+  private holdCount: number = 1;
 
-  readonly emptyBlock: string;
+  private readonly emptyBlock: string;
+  private readonly grayBlock: string;
 
-  constructor(container: HTMLElement, emptyBlock: string, shapeSet: ShapeDict) {
+  constructor(container: HTMLElement, emptyBlock: string, grayBlock: string) {
     this.pixiapp = new PIXI.Application();
     this.container = container!;
     this.containerSize = new XY(container.offsetWidth, container.offsetHeight);
     this.emptyBlock = emptyBlock;
-    this.shapeSet = shapeSet;
+    this.grayBlock = grayBlock;
   }
 
   async init() {
@@ -114,20 +157,24 @@ class Drawer {
     this.redrawFields();
   }
 
-  async loadAssets() {
+  async loadAssets({callback, progress}: {callback: () => void, progress: (percentage: number, next: string) => void}) {
     this.loader.addTexturePaths(DrawerConsts.texturesPaths);
     await this.loader.loadTextures({
-      progress: (percentage, next) => {
-        console.log(`${percentage.toFixed(1)}% done, next: ${next}`);
-      },
-      callback: () => {},
+      progress,
+      callback,
     });
     for (let name of DrawerConsts.texturesPaths.keys()) {
-      this.textures.set(name, this.loader.getTexture(name));
+      this.textures.set(name, new BlockTexture(this.loader.getTexture(name), 1));
+      this.textures.set(name + "t", new BlockTexture(this.loader.getTexture(name), 0.3));
     }
   }
 
-  test() {
+  getBlockElements(): Map<string, ContainerWrapper> {
+    return this.fieldBlockElements;
+  }
+
+  setShapeSet(shapeSet: ShapeDict) {
+    this.shapeSet = shapeSet;
   }
 
   redrawFields() {
@@ -189,6 +236,10 @@ class Drawer {
     this.holdCount = holdCount;
     this.cachedNextQueue = Array(nextCount);
     this.cachedHoldQueue = Array(holdCount);
+    this.cachedNextQueue = Array(this.nextCount).fill("");
+    this.nextQueueElements = Array(this.nextCount).fill(undefined);
+    this.cachedHoldQueue = Array(this.holdCount).fill("");
+    this.holdQueueElements = Array(this.holdCount).fill(undefined);
     this.redrawFields();
   }
 
@@ -200,14 +251,49 @@ class Drawer {
     return this.updateQueue(queue, "hold", this.holdCount);
   }
 
+  changeHoldsAlpha(alpha: number) {
+    for (let e of this.holdQueueElements) {
+      if (e instanceof PieceWrapper)
+        e.obj.alpha = alpha;
+    }
+  }
+
+  grayoutHolds(): void;
+  grayoutHolds(count: number): void;
+  grayoutHolds(arg1?: number) {
+    let count = arg1 ?? this.holdCount;
+
+    const texture = this.textures.get(`block.${this.grayBlock}`);
+    if (texture === undefined) // 型ガード
+      return;
+
+    for (let i = 0; i < count; i++) {
+      let e = this.holdQueueElements[(this.holdQueueElements.length - 1) - i];
+      if (e instanceof PieceWrapper)
+        e.swapTexture(texture.texture);
+    }
+  }
+  
+  restoreHoldsColor(): void;
+  restoreHoldsColor(count: number): void;
+  restoreHoldsColor(arg1?: number) {
+    let count = arg1 ?? this.holdCount;
+
+    for (let i = 0; i < count; i++) {
+      let e = this.holdQueueElements[(this.holdQueueElements.length - 1) - i];
+      if (e instanceof PieceWrapper)
+        e.restoreTexture();
+    }
+  }
+
   private updateQueue(queue: string[], queueName: "next" | "hold", itemCount: number) {
     const queueNameCamel = queueName === "next" ? "Next" : "Hold";
 
-    if (queue.length !== itemCount)
-      return;
     if (!(this[`cached${queueNameCamel}Queue`] instanceof Array)) // 型ガード
       return;
     
+    while (queue.length < itemCount)
+      queue.push("");
     let cachedQueueCopy = [...this[`cached${queueNameCamel}Queue`]];
     let cnt;
     for (cnt = 0; cnt < queue.length; cnt++) {
@@ -215,8 +301,10 @@ class Drawer {
         break;
       cachedQueueCopy.shift();
     }
+    if (cnt === 0)
+      return;
     this.refleshQueueElement(queue, queueName, cnt, itemCount);
-    this[`cached${queueNameCamel}Queue`] = queue;
+    this[`cached${queueNameCamel}Queue`] = [...queue];
 
     function isMatched(a: string[], b: string[]): boolean {
       let n = Math.min(a.length, b.length);
@@ -229,6 +317,7 @@ class Drawer {
   }
 
   private refleshQueueElement(queue: string[], queueName: "next" | "hold", slideCount: number, itemCount: number) {
+    if (slideCount > 0)
     if (!(this[`${queueName}QueueElements`] instanceof Array)) // 型ガード
       return;
     let parent = this.elements.get(`${queueName}Box`);
@@ -239,21 +328,30 @@ class Drawer {
     for (let i = 0; i < slideCount; i++) {
       if (this[`${queueName}QueueElements`].length === 0)
         break;
-      this[`${queueName}QueueElements`][0].obj.destroy();
+      let e = this[`${queueName}QueueElements`][0];
+      if (e instanceof PieceWrapper)
+        e.obj.destroy();
       this[`${queueName}QueueElements`].shift();
     }
     // キュー内を移動する要素
     for (let i = 0; i < itemCount - slideCount; i++) {
       if (i >= this[`${queueName}QueueElements`].length)
         break;
-      this.repositionQueueItem(this[`${queueName}QueueElements`][i], i, itemCount, queueName);
+      let e = this[`${queueName}QueueElements`][i];
+      if (e instanceof PieceWrapper)
+        this.repositionQueueItem(e, i, itemCount, queueName);
     }
     // キューに新たに入る要素
     for (let i = itemCount - slideCount; i < itemCount; i++) {
-      let block = this.createPieceElement(queue[i], this.shapeSet[queue[i]], queueName);
-      parent.obj.addChild(block.obj);
+      let block;
+      if (queue[i] === "")
+        block = undefined;
+      else {
+        block = this.createPieceElement(queue[i], this.shapeSet[queue[i]], queueName);
+        parent.obj.addChild(block.obj);
+        this.repositionQueueItem(block, i, itemCount, queueName);
+      }
       this[`${queueName}QueueElements`].push(block);
-      this.repositionQueueItem(block, i, itemCount, queueName);
     }
   }
 
@@ -262,22 +360,31 @@ class Drawer {
     sprite.setPositionFromCenter(new XY(0, -boxHeight / 2 + boxHeight / itemCount * (index + 0.5)), "Center");
   }
 
-  private createPieceElement(blockId: string, shape: Shape, queueName: "next" | "hold"): ContainerWrapper {
+  private createPieceElement(blockId: string, shape: Shape, queueName: "next" | "hold"): PieceWrapper {
     const shapeWidth = this.nextBoxSize.x * 0.8;
     const shapeSize = new XY(shapeWidth, shapeWidth / shape.width * shape.heightOnInitialDirection);
     const blockScaledownThreshold = 4;
     const blockWidth = shapeWidth / Math.max(blockScaledownThreshold, shape.width);
     const blockSize = new XY(blockWidth, blockWidth);
+    const texture = this.textures.get(`block.${blockId}`);
+    if (texture === undefined)
+      throw new Error(`No texture found: ${blockId}`);
 
     let container = new PIXI.Container();
     for (let xy of shape.get(0)) {
-      let block = new ContainerWrapper(new PIXI.Sprite(this.textures.get(`block.${blockId}`)), blockSize, shapeSize);
+      let block = new ContainerWrapper(new PIXI.Sprite(texture), blockSize, shapeSize);
       container.addChild(block.obj);
       block.obj.width = blockWidth;
       block.obj.height = blockWidth;
-      block.setPositionFromCenter(blockSize.mul(xy.add(new XY(shape.width, 2 + shape.heightOnInitialDirection).half.minus)), "Left-Top");
+      block.setPositionFromCenter(blockSize.mul(xy.add(shape.center(0).add(0.5, -0.5).minus).minusY), "Left-Top");
     }
-    return new ContainerWrapper(container, shapeSize, this[`${queueName}BoxSize`]);
+    /*
+    let circle = new ContainerWrapper(new PIXI.Graphics(), new XY(0, 0), shapeSize);
+    container.addChild(circle.obj);
+    circle.asGraphics.circle(0, 0, 10).fill({color: 0xffffff});
+    circle.setPositionFromCenter(new XY(0, 0));
+    */
+    return new PieceWrapper(container, shapeSize, this[`${queueName}BoxSize`], texture.texture);
   }
 
   updateFieldBlocks(fieldData: string[][]) {
@@ -300,8 +407,10 @@ class Drawer {
       this.fieldBlockElements.delete(coord.toString());
     }
     else {
-      if (this.fieldBlockElements.has(coord.toString()))
+      if (this.fieldBlockElements.has(coord.toString())) {
+        this.fieldBlockElements.get(coord.toString())?.obj.destroy();
         this.fieldBlockElements.delete(coord.toString());
+      }
       let block = new ContainerWrapper(this.createBlockSprite(blockId), this.blockSize, this.fieldSize);
       block.setPositionFromCenter(this.blockSize.mul(coord.add(this.gridCount.minus.half).minusY.add(0, -1)), "Left-Top");
       this.fieldBlockElements.set(coord.toString(), block);
@@ -313,10 +422,15 @@ class Drawer {
     if (field === undefined)
       throw new Error("No field element");
 
-    let block = new PIXI.Sprite(this.textures.get(`block.${blockId}`));
+    let texture = this.textures.get(`block.${blockId}`);
+    if (texture === undefined)
+      throw new Error("No texture found");
+
+    let block = new PIXI.Sprite(texture.texture);
     field.obj.addChild(block);
     block.width = this.blockSize.x;
     block.height = this.blockSize.y;
+    block.alpha = texture.alpha;
     return block;
   }
 

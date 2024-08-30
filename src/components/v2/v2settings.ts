@@ -11,9 +11,13 @@ class GameSettings {
   kickTable: KickTableType = "srsPlusSet";
   shapeSet: ShapeSetType = "standard";
   blockSet: BlockSetType = "standard";
+
   nextCount: number = 5;
-  spawnY: number = 22;
-  spawnYMax: number = 22;
+  holdCount: number = 1;
+  holdSwappableCount: "infinite" | "oneCycle" | number = "oneCycle";
+
+  spawnRelativeY: number = -1;
+  spawnRelativeYMax: number = 2;
 
   bagPattern: string = "[@]~";
   resetOnRunOutBag: boolean = true;
