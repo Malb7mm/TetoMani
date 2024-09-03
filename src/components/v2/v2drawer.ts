@@ -87,7 +87,7 @@ class DrawerConsts {
 
   static readonly margin = new XY(20, 0);
 
-  static readonly texturesPaths = new Map<string, string>([
+  static readonly texturePaths = new Map<string, string>([
     ["block.Z", "img/game/red.png"],
     ["block.L", "img/game/orange.png"],
     ["block.O", "img/game/yellow.png"],
@@ -96,6 +96,13 @@ class DrawerConsts {
     ["block.J", "img/game/cyan.png"],
     ["block.T", "img/game/purple.png"],
     ["block.#", "img/game/gray.png"],
+    ["diamond.Z", "img/game/red_diamond.png"],
+    ["diamond.L", "img/game/orange_diamond.png"],
+    ["diamond.O", "img/game/yellow_diamond.png"],
+    ["diamond.S", "img/game/green_diamond.png"],
+    ["diamond.I", "img/game/blue_diamond.png"],
+    ["diamond.J", "img/game/cyan_diamond.png"],
+    ["diamond.T", "img/game/purple_diamond.png"],
   ]);
 }
 
@@ -107,6 +114,11 @@ class BlockTexture {
     this.texture = texture;
     this.alpha = alpha;
   }
+
+  setTextureTo(sprite: PIXI.Sprite) {
+    sprite.texture = this.texture;
+    sprite.alpha = this.alpha;
+  }
 }
 
 class Drawer {
@@ -114,7 +126,7 @@ class Drawer {
   private container: HTMLElement;
   private containerSize: XY;
   private elements: Map<string, ContainerWrapper> = new Map();
-  private loader: AssetsLoader = new AssetsLoader();
+  private textureLoader: AssetsLoader = new AssetsLoader();
   private textures: Map<string, BlockTexture> = new Map();
   private cachedFieldData: string[][] = [];
   private fieldBlockElements: Map<string, ContainerWrapper> = new Map();
@@ -123,6 +135,7 @@ class Drawer {
   private nextQueueElements: (PieceWrapper | undefined)[] = [];
   private holdQueueElements: (PieceWrapper | undefined)[] = [];
   private shapeSet: ShapeDict = {};
+  private currentDiamondBlockId: string = "";
 
   private fieldSize: XY = new XY(0, 0);
   private blockSize: XY = new XY(0, 0);
@@ -158,14 +171,17 @@ class Drawer {
   }
 
   async loadAssets({callback, progress}: {callback: () => void, progress: (percentage: number, next: string) => void}) {
-    this.loader.addTexturePaths(DrawerConsts.texturesPaths);
-    await this.loader.loadTextures({
+    this.textureLoader.addTexturePaths(DrawerConsts.texturePaths);
+    await this.textureLoader.loadTextures({
       progress,
       callback,
     });
-    for (let name of DrawerConsts.texturesPaths.keys()) {
-      this.textures.set(name, new BlockTexture(this.loader.getTexture(name), 1));
-      this.textures.set(name + "t", new BlockTexture(this.loader.getTexture(name), 0.3));
+    for (let name of DrawerConsts.texturePaths.keys()) {
+      this.textures.set(name, new BlockTexture(this.textureLoader.getTexture(name), 1));
+      if (name.startsWith("block"))
+        this.textures.set(name + "t", new BlockTexture(this.textureLoader.getTexture(name), 0.3));
+      if (name.startsWith("diamond"))
+        this.textures.set(name + "t", new BlockTexture(this.textureLoader.getTexture(name), 0.5));
     }
   }
 
@@ -191,6 +207,7 @@ class Drawer {
     this.elements.set("field", field);
     this.pixiapp.stage.addChild(field.asGraphics);
     field.setPositionFromCenter(new XY(0, 0));
+    field.obj.sortableChildren = true;
 
     this.drawBackgroundFor(field.asGraphics, this.fieldSize);
     this.drawGridFor(field.asGraphics, this.fieldSize, this.gridCount);
@@ -241,6 +258,34 @@ class Drawer {
     this.cachedHoldQueue = Array(this.holdCount).fill("");
     this.holdQueueElements = Array(this.holdCount).fill(undefined);
     this.redrawFields();
+  }
+
+  updateDiamond(diamondId: string, blockId: string, coord: XY) {
+    let field = this.elements.get("field");
+    if (field === undefined)
+      throw new Error(`Field does not exist`);
+
+    let diamond = this.elements.get(`diamond.${diamondId}`);
+    let texture = this.textures.get(`diamond.${blockId}`);
+    if (texture === undefined)
+      throw new Error(`No texture found: ${blockId}`);
+
+    if (diamond === undefined) {
+      diamond = new ContainerWrapper(new PIXI.Sprite(texture), this.blockSize, this.fieldSize);
+      field.obj.addChild(diamond.asSprite);
+      diamond.asSprite.zIndex = 1;
+      diamond.asSprite.width = this.blockSize.x;
+      diamond.asSprite.height = this.blockSize.y;
+      texture.setTextureTo(diamond.asSprite);
+      this.elements.set(`diamond.${diamondId}`, diamond);
+    }
+    else if (blockId != this.currentDiamondBlockId)
+    {
+      texture.setTextureTo(diamond.asSprite);
+    }
+
+    this.setFieldBlockPosition(coord, diamond);
+    this.currentDiamondBlockId = blockId;
   }
 
   updateNextQueue(queue: string[]) {
@@ -368,7 +413,10 @@ class Drawer {
     const blockSize = new XY(blockWidth, blockWidth);
     const texture = this.textures.get(`block.${blockId}`);
     if (texture === undefined)
-      throw new Error(`No texture found: ${blockId}`);
+      throw new Error(`No texture found: block.${blockId}`);
+    const diamondTexture = this.textures.get(`diamond.${blockId}`);
+    if (diamondTexture === undefined)
+      throw new Error(`No texture found: diamond.${blockId}`);
 
     let container = new PIXI.Container();
     for (let xy of shape.get(0)) {
@@ -384,6 +432,7 @@ class Drawer {
     circle.asGraphics.circle(0, 0, 10).fill({color: 0xffffff});
     circle.setPositionFromCenter(new XY(0, 0));
     */
+
     return new PieceWrapper(container, shapeSize, this[`${queueName}BoxSize`], texture.texture);
   }
 
@@ -401,39 +450,6 @@ class Drawer {
     this.cachedFieldData = fieldData;
   }
 
-  private updateFieldBlock(coord: XY, blockId: string) {
-    if (blockId === this.emptyBlock) {
-      this.fieldBlockElements.get(coord.toString())?.obj.destroy();
-      this.fieldBlockElements.delete(coord.toString());
-    }
-    else {
-      if (this.fieldBlockElements.has(coord.toString())) {
-        this.fieldBlockElements.get(coord.toString())?.obj.destroy();
-        this.fieldBlockElements.delete(coord.toString());
-      }
-      let block = new ContainerWrapper(this.createBlockSprite(blockId), this.blockSize, this.fieldSize);
-      block.setPositionFromCenter(this.blockSize.mul(coord.add(this.gridCount.minus.half).minusY.add(0, -1)), "Left-Top");
-      this.fieldBlockElements.set(coord.toString(), block);
-    }
-  }
-
-  private createBlockSprite(blockId: string): PIXI.Sprite {
-    let field = this.elements.get("field");
-    if (field === undefined)
-      throw new Error("No field element");
-
-    let texture = this.textures.get(`block.${blockId}`);
-    if (texture === undefined)
-      throw new Error("No texture found");
-
-    let block = new PIXI.Sprite(texture.texture);
-    field.obj.addChild(block);
-    block.width = this.blockSize.x;
-    block.height = this.blockSize.y;
-    block.alpha = texture.alpha;
-    return block;
-  }
-
   private checkAndFixFieldDataLength(fieldData: string[][]): boolean {
     let result = true;
 
@@ -448,10 +464,10 @@ class Drawer {
 
   private getDifferencesOfFieldData(fieldData: string[][]): XY[] {
     let result: XY[] = [];
-    for (let x = 0; x < fieldData.length; x++) {
-      for (let y = 0; y < fieldData[x].length; y++) {
-        if (fieldData[x][y] !== this.cachedFieldData[x][y])
-          result.push(new XY(x, y));
+    for (let y = 0; y < fieldData.length; y++) {
+      for (let x = 0; x < fieldData[y].length; x++) {
+        if (fieldData[y][x] !== this.cachedFieldData[y][x])
+          result.push(new XY(y, x));
       }
     }
     return result;
@@ -459,13 +475,50 @@ class Drawer {
 
   private getAllCoordsOfExistingBlock(fieldData: string[][]): XY[] {
     let result: XY[] = [];
-    for (let x = 0; x < fieldData.length; x++) {
-      for (let y = 0; y < fieldData[x].length; y++) {
-        if (fieldData[x][y] !== this.emptyBlock)
-          result.push(new XY(x, y));
+    for (let y = 0; y < fieldData.length; y++) {
+      for (let x = 0; x < fieldData[y].length; x++) {
+        if (fieldData[y][x] !== this.emptyBlock)
+          result.push(new XY(y, x));
       }
     }
     return result;
+  }
+
+  private updateFieldBlock(coord: XY, blockId: string) {
+    if (blockId === this.emptyBlock) {
+      this.fieldBlockElements.get(coord.toString())?.obj.destroy();
+      this.fieldBlockElements.delete(coord.toString());
+    }
+    else {
+      if (this.fieldBlockElements.has(coord.toString())) {
+        this.fieldBlockElements.get(coord.toString())?.obj.destroy();
+        this.fieldBlockElements.delete(coord.toString());
+      }
+      let block = new ContainerWrapper(this.createBlockSprite(blockId), this.blockSize, this.fieldSize);
+      this.setFieldBlockPosition(coord, block);
+      this.fieldBlockElements.set(coord.toString(), block);
+    }
+  }
+
+  private setFieldBlockPosition(coord: XY, wrapper: ContainerWrapper) {
+    wrapper.setPositionFromCenter(this.blockSize.mul(coord.add(this.gridCount.minus.half).minusY.add(0, -1)), "Left-Top");
+  }
+
+  private createBlockSprite(blockId: string): PIXI.Sprite {
+    let field = this.elements.get("field");
+    if (field === undefined)
+      throw new Error("No field element");
+
+    let texture = this.textures.get(`block.${blockId}`);
+    if (texture === undefined)
+      throw new Error(`No texture found: block.${blockId}`);
+
+    let block = new PIXI.Sprite(texture.texture);
+    field.obj.addChild(block);
+    block.width = this.blockSize.x;
+    block.height = this.blockSize.y;
+    block.alpha = texture.alpha;
+    return block;
   }
 
   private updateFieldSize() {

@@ -148,13 +148,13 @@ class KeyAssignmentPresets {
       {"key": "KeyW", "func": []}
     ],
     rotateCCW: [
-      {"key": "Numpad2", "func": []}
+      {"key": "KeyN", "func": []}
     ],
     rotateCW: [
-      {"key": "Numpad6", "func": []}
+      {"key": "KeyJ", "func": []}
     ],
     rotate180: [
-      {"key": "Numpad0", "func": []}
+      {"key": "Space", "func": []}
     ],
     hold: [
       {"key": "ShiftLeft", "func": []}

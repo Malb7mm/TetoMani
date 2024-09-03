@@ -19,13 +19,19 @@ class GameSettings {
   spawnRelativeY: number = -1;
   spawnRelativeYMax: number = 2;
 
+  gravity_blockPerFrame: number = 0.02;
+  lockdownTime_sec: number = 0.5;
+  allowInfinityMove: boolean = false;
+
   bagPattern: string = "[@]~";
   resetOnRunOutBag: boolean = true;
 
-  enableUndo: boolean = false;
-  enableQuickSave: boolean = false;
-  enableShowVirtualNext: boolean = false;
-  virtualNextBagCount: number = 0;
+  enableDirectionHint: boolean = true;
+
+  // enableUndo: boolean = false;
+  // enableQuickSave: boolean = false;
+  // enableShowVirtualNext: boolean = false;
+  // virtualNextBagCount: number = 0;
 
   static loadJSON(json: string): GameSettings | undefined {
     let obj = JSON.parse(json);

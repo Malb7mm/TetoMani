@@ -64,6 +64,10 @@ class Shape {
     );
   }
 
+  diamondAt(): XY {
+    return new XY(this.width / 2, this.width / 2);
+  }
+
   get heightOnInitialDirection(): number {
     return Math.max(...this.shapes[0].map(e => e.y))
   }
@@ -412,16 +416,66 @@ class FieldPiece {
   }
 }
 
+class FieldData {
+  private data: string[][];
+  private width: number;
+  private height: number;
+  private emptyBlock: string;
+
+  constructor(width: number, height: number, emptyBlock: string) {
+    this.data = Array(height).fill(null).map(() => Array(width).fill(emptyBlock));
+    this.width = width;
+    this.height = height;
+    this.emptyBlock = emptyBlock;
+  }
+
+  getRawArray(): string[][] {
+    return this.data;
+  }
+
+  get(xy: XY): string {
+    if (xy.x < 0 || xy.x >= this.width || xy.y < 0 || xy.y >= this.height)
+      throw new Error(`Out of bounds: ${xy}`);
+    return this.data[xy.y][xy.x];
+  }
+
+  set(xy: XY, blockId: string) {
+    if (xy.x < 0 || xy.x >= this.width || xy.y < 0 || xy.y >= this.height)
+      throw new Error(`Out of bounds: ${xy}`);
+    this.data[xy.y][xy.x] = blockId;
+  }
+
+  clearGivenLines(yCoords: number[]) {
+    for (let y of yCoords) {
+      if (y < 0 || y >= this.height)
+        throw new Error(`Over the field height: ${y}`);
+    }
+
+    let y = Math.min(...yCoords);
+    for (let yCopyFrom = y; yCopyFrom < this.height; y++, yCopyFrom++) {
+      if (yCoords.includes(yCopyFrom)) {
+        y--;
+        continue;
+      }
+      this.data[y] = this.data[yCopyFrom];
+    }
+    for (; y < this.height; y++) {
+      this.data[y] = Array(this.width).fill(this.emptyBlock);
+    }
+  }
+}
+
 class Field {
-  fieldData: string[][];
-  width: number;
-  heightVisible: number;
-  height: number;
-  blockSet: BlockSet;
-  emptyBlock: string;
+  private fieldData: FieldData;
+
+  private width: number;
+  private heightVisible: number;
+  private height: number;
+  private blockSet: BlockSet;
+  private emptyBlock: string;
 
   constructor({width, height, topOutHeight, blockSet, emptyBlock}: {width: number, height: number, topOutHeight: number, blockSet: BlockSet, emptyBlock: string}) {
-    this.fieldData = Array(width).fill(null).map(() => Array(topOutHeight).fill(emptyBlock));
+    this.fieldData = new FieldData(width, topOutHeight, emptyBlock);
     this.width = width;
     this.heightVisible = height;
     this.height = topOutHeight;
@@ -429,11 +483,16 @@ class Field {
     this.emptyBlock = emptyBlock;
   }
 
+  getArrayTransposed(): string[][] {
+    let array = JSON.parse(JSON.stringify(this.fieldData.getRawArray()));
+    return array[0].map((_: any, i: number) => array.map((row: number[]) => row[i]));
+  }
+
   isOverlap(piece: FieldPiece): boolean {
     for (let xy of piece.getAllBlocksXy()) {
       if (xy.x < 0 || xy.x >= this.width || xy.y < 0 || xy.y >= this.height)
         return true;
-      if (this.fieldData[xy.x][xy.y] !== this.emptyBlock)
+      if (this.fieldData.get(xy) !== this.emptyBlock)
         return true;
     }
     return false;
@@ -449,7 +508,26 @@ class Field {
 
   setPieceBlocks(piece: FieldPiece) {
     for (let xy of piece.getAllBlocksXy())
-      this.fieldData[xy.x][xy.y] = piece.shape.name;
+      this.fieldData.set(xy, piece.shape.name);
+  }
+
+  clearFilledLines(callback: (lineCount: number) => void) {
+    let yCoords: number[] = [];
+    for (let y = 0; y < this.height; y++) {
+      let doLineClear = true;
+      for (let x = 0; x < this.width; x++) {
+        if (this.fieldData.get(new XY(x, y)) === this.emptyBlock)
+          doLineClear = false;
+      }
+
+      if (doLineClear)
+        yCoords.push(y);
+    }
+
+    if (yCoords.length > 0) {
+      this.fieldData.clearGivenLines(yCoords);
+      callback(yCoords.length);
+    }
   }
 }
 

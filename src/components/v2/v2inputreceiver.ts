@@ -14,7 +14,6 @@ class InputReceiver {
         this.activeControls.add(control);
     });
     document.addEventListener("keyup", e => {
-      console.log("keyup:", e.code);
       for (let control of this.getAssignedControlWithoutFunc(e))
         this.activeControls.delete(control);
     });

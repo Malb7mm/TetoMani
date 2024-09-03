@@ -9,6 +9,7 @@ import { GameCycle } from './v2/v2gamecycle';
 import { GameSettings } from './v2/v2settings';
 import { PlayerSettings } from './v2/v2playersettings';
 import { FpsCounter } from './scripts/fpscounter';
+import { AssetsLoader } from './v2/v2assetsloader';
 
 let piecebag = new PieceBag("[@]~", BagSets.bag7);
 piecebag.elementRoot.generateQueue();
@@ -42,22 +43,15 @@ onMounted(async () => {
 
   let ps = new PlayerSettings();
   ps.handlings.autoRepeatRate_Frame = 0;
-  ps.handlings.delayedAutoShift_Frame = 7;
+  ps.handlings.delayedAutoShift_Frame = 8;
+  ps.handlings.dasCancelDelay_Frame = 6;
+  ps.handlings.softDropFactor_Multiplier = Infinity;
   cycle = GameCycle.createInstance(new GameSettings(), ps, drawer);
-
-  let fpsCounter = new FpsCounter();
-  drawLoop();
-  function drawLoop() {
-    cycle.drawLoop();
-    fpsCounter.log();
-    inputString.value = Array.from(cycle.inputReceiver.getAllActive()).join(", ");
-  }
-  let proc = setInterval(() => cycle.processLoop(), 5);
-  let draw = setInterval(() => drawLoop(), 16.7);
+  cycle.start(250);
 });
 
 function getFieldArray() {
-  console.log(cycle.field.fieldData);
+  console.log(cycle.field.getArrayTransposed());
 }
 
 function getDrawerBlockElements() {
@@ -65,8 +59,9 @@ function getDrawerBlockElements() {
 }
 
 function getHoldQueue() {
-  console.log(cycle.fieldPieceController.getHoldQueue());
+  console.log(cycle.controller.getHoldQueue());
 }
+
 </script>
 
 <template>

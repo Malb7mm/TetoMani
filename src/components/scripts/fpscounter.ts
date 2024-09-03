@@ -3,6 +3,11 @@ class FpsCounter {
   fpsCount: number = 0;
   fpsValue: number = 0;
   prevLogging: number = Date.now() - 1000;
+  name: string;
+
+  constructor(name: string) {
+    this.name = name;
+  }
 
   get(): number {
     if (Date.now() - this.fpsMeasureBegin >= 1000) {
@@ -14,11 +19,11 @@ class FpsCounter {
     return this.fpsValue;
   }
 
-  log() {
+  log(interval: number) {
     this.get();
-    if (this.prevLogging + 1000 < Date.now()) {
-      this.prevLogging += 1000;
-      console.log("FPS: ", this.fpsValue);
+    if (this.prevLogging + interval < Date.now()) {
+      this.prevLogging += interval;
+      console.log(`[${this.name}] FPS: ${this.fpsValue}`);
     }
   }
 }
